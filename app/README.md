@@ -3,7 +3,8 @@
 A small app for phones and tablets that shows your [D.C. O'HAIR](../README.md) disk city as lists you can tap into.
 
 - **Drives**: every drive on every device, with what fills it, Used / Free / Total, and the almost-full warning.
-- **Browse**: tap into devices, drives and folders, biggest first; switch to **Biggest files** to see the largest files anywhere below.
+- **Browse**: tap into devices, drives and folders, biggest first. **Map** shows the same thing as a treemap you tap into, and **Biggest** lists the largest files anywhere below.
+- **City**: your hub's 3D city, right in the app.
 - **Search**: find any file or folder by name.
 - **Alerts**: what needs attention, and **Scan now**.
 - The category chips (Music, Games, Series, Movies, Other) filter everything, like on the web page, and the app has the same six themes.

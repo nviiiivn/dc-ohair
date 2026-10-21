@@ -1,2 +1,3 @@
 # what the app needs on the phone; flet build bundles these
 flet==1.0.4
+flet-webview==1.0.4

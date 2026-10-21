@@ -32,6 +32,14 @@ class AppModelTest(unittest.TestCase):
         hits = model.search(model.index(self.top), 'harbor')
         self.assertTrue(hits and all('harbor' in h.n.lower() for h in hits))
 
+    def test_squarify_fills_the_box(self):
+        rects = model.squarify([6, 6, 4, 3, 2, 2, 1, 0], 0, 0, 600, 400)
+        self.assertIsNone(rects[-1])
+        area = sum(w * h for _, _, w, h in rects[:-1])
+        self.assertAlmostEqual(area, 600 * 400, delta=1)
+        for x, y, w, h in rects[:-1]:
+            self.assertTrue(-0.01 <= x and x + w <= 600.01 and -0.01 <= y and y + h <= 400.01)
+
     def test_fmt(self):
         self.assertEqual(model.fmt(1024 ** 4 * 3.5), '3.50T')
         self.assertEqual(model.fmt(5 * 1000 ** 3, 'decimal'), '5.0GB')

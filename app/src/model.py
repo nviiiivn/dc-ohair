@@ -144,3 +144,49 @@ def search(idx, q, limit=50):
     hits = [(0 if name == q else 1 if name.startswith(words[0]) else 2, -n.s, n) for name, n in idx if all(w in name for w in words)]
     hits.sort(key=lambda h: (h[0], h[1]))
     return [h[2] for h in hits[:limit]]
+
+
+def squarify(values, x, y, w, h):
+    """Squarified treemap: values -> (x, y, w, h) rects in the same order (None for zero values)."""
+    total = sum(values)
+    out = [None] * len(values)
+    if total <= 0 or w <= 0 or h <= 0:
+        return out
+    scale = w * h / total
+    items = [(v * scale, i) for i, v in enumerate(values) if v > 0]
+    row = []
+
+    def worst(r, side):
+        s = sum(a for a, _ in r)
+        return max(max(side * side * a / (s * s), s * s / (side * side * a)) for a, _ in r)
+
+    def flush():
+        nonlocal x, y, w, h, row
+        s = sum(a for a, _ in row)
+        if w >= h:
+            cw = s / h
+            yy = y
+            for a, i in row:
+                out[i] = (x, yy, cw, a / cw)
+                yy += a / cw
+            x, w = x + cw, w - cw
+        else:
+            ch = s / w
+            xx = x
+            for a, i in row:
+                out[i] = (xx, y, a / ch, ch)
+                xx += a / ch
+            y, h = y + ch, h - ch
+        row = []
+
+    i = 0
+    while i < len(items):
+        side = min(w, h)
+        if not row or worst(row, side) >= worst(row + [items[i]], side):
+            row.append(items[i])
+            i += 1
+        else:
+            flush()
+    if row:
+        flush()
+    return out

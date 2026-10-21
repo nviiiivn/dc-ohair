@@ -7,6 +7,7 @@ folders sorted by size, the biggest files below anywhere, search, and alerts.
 import asyncio, datetime, functools, os
 
 import flet as ft
+import flet.canvas as cv
 
 import model
 import themes
@@ -48,17 +49,32 @@ class App:
 
     # ---------- start, connect, log in ----------
 
+    async def pref(self, key, default=None):
+        """A saved setting; a slow or missing preferences service just means the default."""
+        try:
+            value = await self.prefs.get(key)
+        except (RuntimeError, TimeoutError):
+            return default
+        return default if value is None else value
+
+    async def save_pref(self, key, value):
+        try:
+            await self.prefs.set(key, value)
+        except (RuntimeError, TimeoutError):
+            pass
+
     async def start(self):
-        self.theme = await self.prefs.get('theme') or 'dark'
+        self.page.update()  # lets the client register the preferences service before the first read
+        self.theme = await self.pref('theme', 'dark')
         self.t = themes.apply(self.page, self.theme)
-        cats = await self.prefs.get('cats')
+        cats = await self.pref('cats')
         self.flt = model.Filter([c == '1' for c in cats] if isinstance(cats, list) else None)
         self.page.title = "D.C. O'HAIR"
-        url = await self.prefs.get('hub_url')
+        url = await self.pref('hub_url')
         if url == 'demo':
             self.hub = Demo()
         elif url:
-            self.hub = Hub(url, await self.prefs.get('session') or '')
+            self.hub = Hub(url, await self.pref('session', ''))
         if self.hub:
             await self.load()
         else:
@@ -82,12 +98,12 @@ class App:
                 msg.value = 'Type the address of your hub.'
                 return self.page.update()
             self.hub = Hub(url.value)
-            await self.prefs.set('hub_url', self.hub.url)
+            await self.save_pref('hub_url', self.hub.url)
             await self.load()
 
         async def demo(e):
             self.hub = Demo()
-            await self.prefs.set('hub_url', 'demo')
+            await self.save_pref('hub_url', 'demo')
             await self.load()
 
         url.on_submit = connect
@@ -115,7 +131,7 @@ class App:
             except HubError as err:
                 msg.value = str(err)
                 return self.page.update()
-            await self.prefs.set('session', session)
+            await self.save_pref('session', session)
             await self.load()
 
         pw.on_submit = go
@@ -177,6 +193,7 @@ class App:
             selected_index=self.tab, on_change=self.switch, bgcolor=t['bg2'], indicator_color=t['surface'],
             destinations=[ft.NavigationBarDestination(icon=ft.Icons.STORAGE, label='Drives'),
                           ft.NavigationBarDestination(icon=ft.Icons.FOLDER_OPEN, label='Browse'),
+                          ft.NavigationBarDestination(icon=ft.Icons.LOCATION_CITY, label='City'),
                           ft.NavigationBarDestination(icon=ft.Icons.SEARCH, label='Search'),
                           ft.NavigationBarDestination(icon=ft.Icons.NOTIFICATIONS, label='Alerts',
                                                       badge=str(len(alerts)) if alerts else None)])
@@ -194,7 +211,7 @@ class App:
         self.render()
 
     def render(self):
-        self.body.content = [self.drives_view, self.browse_view, self.search_view, self.alerts_view][self.tab]()
+        self.body.content = [self.drives_view, self.browse_view, self.city_view, self.search_view, self.alerts_view][self.tab]()
         self.page.update()
 
     async def reload(self, e=None):
@@ -221,7 +238,7 @@ class App:
             on = list(self.flt.on)
             on[i] = not on[i]
             self.flt = model.Filter(on if any(on) else None)
-            await self.prefs.set('cats', ['1' if x else '0' for x in self.flt.on])
+            await self.save_pref('cats', ['1' if x else '0' for x in self.flt.on])
             self.shown = PAGE_ROWS
             self.render()
 
@@ -262,7 +279,8 @@ class App:
             self.root, self.highlight = node, None
         else:
             self.root, self.highlight = node.p, node
-        self.mode = 'here'
+        if self.mode == 'files' or not node.drillable:
+            self.mode = 'here'
         self.shown = PAGE_ROWS
         self.go_tab(1)
 
@@ -331,7 +349,7 @@ class App:
     def browse_view(self):
         t = self.t
         node = self.root or self.top
-        rows = model.kids(node, self.flt, self.order) if self.mode == 'here' else model.biggest_files(node, self.flt)
+        rows = model.biggest_files(node, self.flt) if self.mode == 'files' else model.kids(node, self.flt, self.order)
         biggest = max([self.flt.size(r) for r in rows] or [1]) or 1
 
         def set_mode(e):
@@ -380,15 +398,104 @@ class App:
                       spacing=0, expand=True, tight=True),
             ft.IconButton(ft.Icons.INFO_OUTLINE, tooltip='Details', on_click=lambda e: self.details(node))])
         controls = ft.Row([
-            ft.SegmentedButton(segments=[ft.Segment('here', label=ft.Text('Here')), ft.Segment('files', label=ft.Text('Biggest files'))],
+            ft.SegmentedButton(segments=[ft.Segment('here', label=ft.Text('List')), ft.Segment('map', label=ft.Text('Map')),
+                                         ft.Segment('files', label=ft.Text('Biggest'))],
                                selected=[self.mode], on_change=set_mode),
             ft.Dropdown(value=self.order, width=130, dense=True, on_select=set_order,
                         options=[ft.DropdownOption('size', 'Size'), ft.DropdownOption('name', 'Name'),
                                  ft.DropdownOption('newest', 'Newest'), ft.DropdownOption('oldest', 'Oldest')]),
         ], wrap=True, spacing=8)
-        return ft.Column([ft.Container(ft.Column([self.crumbs(), head, self.chips(), controls], spacing=6, tight=True),
-                                       padding=ft.Padding.symmetric(horizontal=8)),
-                          ft.ListView(tiles, expand=True, padding=ft.Padding.symmetric(horizontal=4))], expand=True)
+        top = ft.Container(ft.Column([self.crumbs(), head, self.chips(), controls], spacing=6, tight=True),
+                           padding=ft.Padding.symmetric(horizontal=8))
+        if self.mode == 'map':
+            return ft.Column([top, self.map_view(node, rows)], expand=True)
+        return ft.Column([top, ft.ListView(tiles, expand=True, padding=ft.Padding.symmetric(horizontal=4))], expand=True)
+
+    # ---------- Map: a treemap you tap into ----------
+
+    def map_view(self, node, rows):
+        self.map_node, self.map_rows = node, rows
+        w = (self.page.width or 400) - 16
+        h = max(240, (self.page.height or 800) - 330)
+        self.map_size = (w, h)
+        self.canvas = cv.Canvas(shapes=self.map_shapes(w, h), expand=True, on_resize=self.map_resized, resize_interval=150)
+        return ft.Container(ft.GestureDetector(content=self.canvas, on_tap_down=self.map_tap, expand=True),
+                            expand=True, padding=ft.Padding.only(left=8, right=8, bottom=8))
+
+    def map_resized(self, e):
+        if (e.width, e.height) != self.map_size and e.width > 0 and e.height > 0:
+            self.map_size = (e.width, e.height)
+            self.canvas.shapes = self.map_shapes(e.width, e.height)
+            self.canvas.update()
+
+    def map_shapes(self, w, h):
+        t = self.t
+        rows = [r for r in self.map_rows if self.flt.size(r) > 0][:400]
+        rects = model.squarify([self.flt.size(r) for r in rows], 0, 0, w, h)
+        self.map_hits = []
+        shapes = []
+        fill = lambda c: ft.Paint(color=c, style=ft.PaintingStyle.FILL)
+        for r, rect in zip(rows, rects):
+            if not rect:
+                continue
+            x, y, rw, rh = rect
+            self.map_hits.append((x, y, rw, rh, r))
+            gap = 1.5 if min(rw, rh) > 6 else 0.5
+            x, y, rw, rh = x + gap, y + gap, rw - 2 * gap, rh - 2 * gap
+            if rw <= 0 or rh <= 0:
+                continue
+            kids = model.kids(r, self.flt) if r.k else []
+            label = rw > 54 and rh > 30
+            if not kids:
+                shapes.append(cv.Rect(x, y, rw, rh, border_radius=3, paint=fill(self.cat_color(r.dominant))))
+            else:
+                shapes.append(cv.Rect(x, y, rw, rh, border_radius=3, paint=fill(t['surface'])))
+                head = 16 if label else 0
+                inner = model.squarify([self.flt.size(k) for k in kids[:150]], x + 2, y + 2 + head, rw - 4, rh - 4 - head)
+                for k, kr in zip(kids[:150], inner):
+                    if kr and kr[2] > 1 and kr[3] > 1:
+                        shapes.append(cv.Rect(kr[0] + 0.5, kr[1] + 0.5, kr[2] - 1, kr[3] - 1, paint=fill(self.cat_color(k.dominant))))
+            if label:
+                shapes.append(cv.Text(x + 5, y + 2, '%s  %s' % (r.n, self.fmt(self.flt.size(r))), max_lines=1, max_width=rw - 10,
+                                      ellipsis='…', style=ft.TextStyle(size=11, weight=ft.FontWeight.W_600, color=t['text'])))
+        if not shapes:
+            shapes.append(cv.Text(w / 2, h / 2, 'Nothing here with these categories.', alignment=ft.Alignment.CENTER,
+                                  style=ft.TextStyle(color=t['text2'])))
+        return shapes
+
+    def map_tap(self, e):
+        p = e.local_position
+        for x, y, w, h, r in self.map_hits:
+            if x <= p.x <= x + w and y <= p.y <= y + h:
+                if r.drillable:
+                    self.root, self.highlight, self.shown = r, None, PAGE_ROWS
+                    self.render()
+                else:
+                    self.details(r)
+                return
+
+    # ---------- City: the hub's own 3D page ----------
+
+    def city_view(self):
+        t = self.t
+        if isinstance(self.hub, Hub):
+            try:
+                import flet_webview as fwv
+                return ft.Column([fwv.WebView(url=self.hub.url, expand=True, bgcolor=t['bg'])], expand=True)
+            except ImportError:
+                pass
+        async def open_web(e):
+            await ft.UrlLauncher().launch_url(self.hub.url)
+        body = [ft.Icon(ft.Icons.LOCATION_CITY, size=64, color=t['accent']),
+                ft.Text('The 3D city lives on your hub\'s web page.', size=16, text_align=ft.TextAlign.CENTER),
+                ft.TextButton('See the map instead', icon=ft.Icons.GRID_VIEW,
+                              on_click=lambda e: (setattr(self, 'mode', 'map'), self.go_tab(1)))]
+        if isinstance(self.hub, Hub):
+            body.append(ft.FilledButton('Open it in the browser', icon=ft.Icons.OPEN_IN_BROWSER, on_click=open_web))
+        else:
+            body.insert(2, ft.Text('Connect to a hub to fly through it here.', color=t['text2'], text_align=ft.TextAlign.CENTER))
+        return ft.Container(ft.Column(body, horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True, spacing=12),
+                            alignment=ft.Alignment.CENTER, expand=True, padding=24)
 
     # ---------- Search ----------
 
@@ -460,14 +567,14 @@ class App:
 
         async def pick(name, ev):
             self.theme = name
-            await self.prefs.set('theme', name)
+            await self.save_pref('theme', name)
             self.t = themes.apply(self.page, name)
             self.page.pop_dialog()
             self.build_main()
 
         async def change_hub(ev):
-            await self.prefs.set('hub_url', '')
-            await self.prefs.set('session', '')
+            await self.save_pref('hub_url', '')
+            await self.save_pref('session', '')
             self.page.pop_dialog()
             self.show_connect()
 
