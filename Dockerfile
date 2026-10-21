@@ -8,7 +8,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY agent.py collect.py hub.py demo.py push.py discover.py notify.py ./
+COPY agent.py collect.py hub.py demo.py push.py discover.py notify.py oidc.py ./
 COPY web ./web
 
 # the hub runs as an ordinary user; /data holds scans, history and the hub's ssh key

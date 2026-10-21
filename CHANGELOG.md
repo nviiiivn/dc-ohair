@@ -5,8 +5,14 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.7.0] - sign in with OIDC, and a VoidAuth helper
+
+### Added
+- **Sign in with OIDC** (VoidAuth, Authelia, Authentik, Keycloak, Google…): the authorization-code flow with PKCE, an allowed-users list, and the client secret from an environment variable or a command, never the config.
+- **Set up VoidAuth for me** in Settings → Security writes both setups ready to paste: VoidAuth's declared OIDC app plus the hub's settings, or a Caddy forward-auth block that still lets push agents through with their tokens.
+- `python3 hub.py --auth-off` turns the login off again if a setting locks you out.
 
 ## [0.6.1] - phones, tablets and a fresh coat
 

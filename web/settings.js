@@ -46,6 +46,15 @@ document.addEventListener('click', async (e) => {
 // ---------- login ----------
 
 export function showLogin(me) {
+  if (me.auth === 'oidc') {
+    const next = encodeURIComponent(location.pathname + location.search);
+    const sso = el(`<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><div class="sheet small">
+      <img src="/logo.svg" alt="" width="56" height="56"><h2 id="loginTitle">D.C. O'HAIR</h2>
+      <p class="muted">Sign in to see your drives.</p>
+      <a class="primary button" href="/auth/login?next=${next}">Sign in with ${esc(me.login_name)}</a></div></div>`);
+    document.body.append(sso);
+    return;
+  }
   const box = el(`<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
     <form class="sheet small">
       <img src="/logo.svg" alt="" width="56" height="56">
@@ -446,6 +455,53 @@ function channelForm(c, i) {
     ${body}<p class="result" data-chres="${i}" aria-live="polite"></p></div>`;
 }
 
+// writes the VoidAuth side of either setup, ready to paste; nothing here talks to VoidAuth itself
+function voidauthHelper() {
+  return `<details class="help voidauth"><summary>Set up VoidAuth for me</summary>
+    <p class="muted"><a href="https://github.com/voidauth/voidauth" rel="noopener">VoidAuth</a> is a small self-hosted login service. Fill in two addresses and copy what this writes.</p>
+    <div class="grid2"><label>This page's address <input data-va="dc" value="${esc(location.origin)}" class="mono"></label>
+      <label>VoidAuth's address <input data-va="auth" placeholder="https://auth.example.com" class="mono"></label></div>
+    <fieldset class="seg3"><legend>How</legend>
+      <label><input type="radio" name="va" value="oidc" checked> Sign in with OIDC</label>
+      <label><input type="radio" name="va" value="proxy"> VoidAuth guards the whole page (forward auth)</label></fieldset>
+    <div class="row"><button type="button" data-va-go>Write it</button></div>
+    <div class="va-out"></div></details>`;
+}
+
+function voidauthText(dc, auth, how) {
+  const host = (u) => u.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const secret = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
+  if (how === 'oidc') {
+    return [
+      ['1. Add to the voidauth service in its compose.yml (environment:), then docker compose up -d', `OIDC_dcohair_CLIENT_SECRET: "${secret}"
+OIDC_dcohair_CLIENT_REDIRECT_URLS: "${dc}/auth/callback"
+OIDC_dcohair_CLIENT_AUTH_METHOD: "client_secret_post"
+OIDC_dcohair_CLIENT_DISPLAY_NAME: "D.C. O'HAIR"`],
+      ["2. Give the same secret to the hub (systemd: Environment= line; Docker: environment:), then restart it", `DC_OIDC_SECRET=${secret}`],
+      ['3. Then fill in above: Issuer, Client ID and the variable, and press Apply', `Issuer: ${auth}/oidc
+Client ID: dcohair
+Secret from this environment variable: DC_OIDC_SECRET`],
+    ];
+  }
+  return [
+    ['1. Caddyfile: VoidAuth guards the page; push agents keep their own way in with their tokens', `${host(dc)} {
+  @agents path /agent.py /push.py /api/push/spec /api/report
+  handle @agents {
+    reverse_proxy dc-ohair:7171
+  }
+  handle {
+    forward_auth voidauth:3000 {
+      uri /api/authz/forward-auth
+      copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+    }
+    reverse_proxy dc-ohair:7171
+  }
+}`],
+    ['2. Then choose "My reverse proxy handles it" above, trust Caddy\'s address, keep the header Remote-User, and press Apply. Make sure only Caddy can reach the hub\'s port.', `Proxy addresses to trust: <Caddy's IP, e.g. 172.18.0.2 in Docker, or 127.0.0.1>
+Header that names the user: Remote-User`],
+  ];
+}
+
 function field(label, key, value, attrs = '') {
   return `<label>${label} <input data-k="${key}" value="${esc(value)}" ${attrs}></label>`;
 }
@@ -541,7 +597,8 @@ function render(dlg) {
     html = `<fieldset class="seg3"><legend>Who can open this page</legend>
         <label><input type="radio" name="sec" value="off" ${auth === 'off' ? 'checked' : ''}> Anyone who can reach it</label>
         <label><input type="radio" name="sec" value="password" ${auth === 'password' ? 'checked' : ''}> Admin login</label>
-        <label><input type="radio" name="sec" value="proxy" ${auth === 'proxy' ? 'checked' : ''}> My reverse proxy handles it</label></fieldset>
+        <label><input type="radio" name="sec" value="proxy" ${auth === 'proxy' ? 'checked' : ''}> My reverse proxy handles it</label>
+        <label><input type="radio" name="sec" value="oidc" ${auth === 'oidc' ? 'checked' : ''}> Sign in with OIDC</label></fieldset>
       ${S.me.exposed ? '<p class="warn">No login is on, and the hub listens on your network: anyone who can open this page can see file names and change devices. Turn on a login, or put it behind a reverse proxy.</p>' : ''}
       <div class="sec-pass" ${auth === 'password' ? '' : 'hidden'}>
         ${S.me.password_set ? '<label>Current password <input type="password" name="old" autocomplete="current-password"></label>' : ''}
@@ -550,6 +607,20 @@ function render(dlg) {
         <label>Proxy addresses to trust <input name="proxies" value="${esc(list(hub.trusted_proxies || ['127.0.0.1', '::1']))}" class="mono"></label>
         <label>Header that names the user <input name="header" value="${esc(hub.proxy_user_header || 'Remote-User')}" class="mono"></label>
         <p class="muted">Only requests from those addresses that carry the header get in. Works with Authelia, Authentik, VoidAuth or oauth2-proxy (see docs/security.md).</p></div>
+      <div class="sec-oidc" ${auth === 'oidc' ? '' : 'hidden'}>
+        <p class="muted">Sign in through your own login service: VoidAuth, Authelia, Authentik, Keycloak, Google and the like. Register D.C. O'HAIR there with this redirect URL:</p>
+        ${copyBox(location.origin + '/auth/callback')}
+        <div class="grid2">
+          <label>Issuer <input name="o_issuer" value="${esc((hub.oidc || {}).issuer || '')}" placeholder="https://auth.example.com/oidc" class="mono"></label>
+          <label>Client ID <input name="o_client" value="${esc((hub.oidc || {}).client_id || '')}" placeholder="dcohair" class="mono"></label>
+          <label>Secret from this environment variable <input name="o_env" value="${esc((hub.oidc || {}).client_secret_env || '')}" placeholder="DC_OIDC_SECRET" class="mono"></label>
+          <label>…or from this command <input name="o_cmd" value="${esc(list((hub.oidc || {}).client_secret_cmd))}" placeholder="pass show oidc/dcohair" class="mono"></label>
+        </div>
+        <label>Who may sign in (emails or user names) <input name="o_users" value="${esc(list((hub.oidc || {}).allowed_users))}" placeholder="me@example.com" class="mono"></label>
+        <label>Name on the sign-in button <input name="o_name" value="${esc((hub.oidc || {}).name || '')}" placeholder="VoidAuth"></label>
+        <p class="muted">If a setting is wrong and you get locked out, run <span class="mono">python3 hub.py --auth-off</span> on the hub.</p>
+      </div>
+      ${voidauthHelper()}
       <div class="row"><button type="button" class="primary" data-sec>Apply</button>${auth === 'password' ? '<button type="button" class="ghost" data-logout>Log out</button>' : ''}</div>
       <p class="result" aria-live="polite"></p>
       <h4>Enrollment tokens</h4>
@@ -611,6 +682,7 @@ function wire(body, dlg) {
     if (e.target.name === 'sec') {
       body.querySelector('.sec-pass').hidden = e.target.value !== 'password';
       body.querySelector('.sec-proxy').hidden = e.target.value !== 'proxy';
+      body.querySelector('.sec-oidc').hidden = e.target.value !== 'oidc';
     }
     if (e.target.dataset.file !== undefined && e.target.files[0]) e.target.files[0].text().then((t) => { body.querySelector('[data-yaml]').value = t; });
   });
@@ -625,15 +697,34 @@ function wire(body, dlg) {
     }
     if (t.closest('[data-wizard]')) { dlg.close(); return openWizard(S.me); }
     const out = body.querySelector('.result');
+    if (t.closest('[data-va-go]')) {
+      const dc = body.querySelector('[data-va="dc"]').value.trim().replace(/\/$/, '');
+      const auth = body.querySelector('[data-va="auth"]').value.trim().replace(/\/$/, '');
+      const box = body.querySelector('.va-out');
+      if (!/^https:\/\//.test(auth)) { box.innerHTML = '<p class="err">VoidAuth\'s address should start with https://</p>'; return; }
+      const how = body.querySelector('input[name=va]:checked').value;
+      box.innerHTML = voidauthText(dc, auth, how).map(([h, text]) => `<p>${esc(h)}</p>${copyBox(text)}`).join('');
+      if (how === 'oidc') {
+        body.querySelector('[name=o_issuer]').value = auth + '/oidc';
+        body.querySelector('[name=o_client]').value = 'dcohair';
+        body.querySelector('[name=o_env]').value = 'DC_OIDC_SECRET';
+        if (!body.querySelector('[name=o_name]').value) body.querySelector('[name=o_name]').value = 'VoidAuth';
+      }
+      return;
+    }
     if (t.closest('[data-sec]')) {
       const mode = body.querySelector('input[name=sec]:checked').value;
       try {
+        const v = (n) => body.querySelector(`[name=${n}]`).value.trim();
         await api('/api/security', {
           auth: mode, password: body.querySelector('[name=new]')?.value || '', old: body.querySelector('[name=old]')?.value || '',
-          trusted_proxies: unlist(body.querySelector('[name=proxies]').value), proxy_user_header: body.querySelector('[name=header]').value,
+          trusted_proxies: unlist(v('proxies')), proxy_user_header: v('header'),
+          oidc: { issuer: v('o_issuer'), client_id: v('o_client'), client_secret_env: v('o_env'), client_secret_cmd: v('o_cmd'),
+            allowed_users: unlist(v('o_users')), name: v('o_name') },
         });
         S.cfg.hub.auth = mode;
-        out.textContent = mode === 'off' ? 'Login is off.' : mode === 'password' ? 'Login is on. You stay logged in on this browser for 30 days.' : 'Trusting your reverse proxy now.';
+        out.textContent = { off: 'Login is off.', password: 'Login is on. You stay logged in on this browser for 30 days.',
+          proxy: 'Trusting your reverse proxy now.', oidc: 'Sign-in is on. This browser stays signed in; others go through your login service.' }[mode];
         out.className = 'result ok';
         S.me = await api('/api/me');
       } catch (err) { out.textContent = err.message; out.className = 'result err'; }

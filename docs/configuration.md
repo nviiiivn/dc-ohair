@@ -73,6 +73,14 @@ hub:
 | `alerts.health` | Send notifications about drive health. Default `true`. |
 | `alerts.offline` | Send notifications when a device can't be scanned. Default `false`, because sleeping laptops make it noisy. |
 | `notify` | Where alerts go: a list of channels, see below. |
+| `auth` | `off` (default), `password`, `proxy` or `oidc`. Change it in Settings → Security. |
+| `oidc.issuer` | Your provider's issuer, an `https://` address (VoidAuth: `https://auth.example.com/oidc`). |
+| `oidc.client_id` | The client ID you registered. The redirect URL to register is `https://<this page>/auth/callback`. |
+| `oidc.client_secret_env` / `oidc.client_secret_cmd` | Where the client secret comes from: an environment variable, or a command that prints it. Leave both out for a public client. |
+| `oidc.allowed_users` | Emails or user names that may sign in. Required, unless you set `oidc.allow_any_user: true` on purpose. |
+| `oidc.name` | What the sign-in button says. |
+| `oidc.token_auth` | `post` (default) or `basic`, for how the client secret is sent. |
+| `oidc.redirect_url` | Set it if the hub can't work out its own public address (behind unusual proxies). |
 
 ### notify
 

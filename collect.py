@@ -53,8 +53,8 @@ def validate(cfg):
     # YAML 1.1 reads a bare off/on as false/true
     auth = cfg['hub'].get('auth', 'off')
     cfg['hub']['auth'] = {False: 'off', None: 'off', True: 'password'}.get(auth, auth) if not isinstance(auth, str) else auth
-    if cfg['hub']['auth'] not in ('off', 'password', 'proxy'):
-        raise ValueError('hub.auth must be off, password or proxy')
+    if cfg['hub']['auth'] not in ('off', 'password', 'proxy', 'oidc'):
+        raise ValueError('hub.auth must be off, password, proxy or oidc')
     if isinstance(cfg['hub']['schedule'], (str, int)):
         cfg['hub']['schedule'] = [cfg['hub']['schedule']]
     parse_size(cfg['scan']['min_size'])

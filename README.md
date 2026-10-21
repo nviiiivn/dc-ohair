@@ -272,12 +272,13 @@ Press the gear to open Settings:
 | **Alerts** | The "almost full" line, and where alerts go: ntfy, Discord, email or a webhook, each with a test button. |
 | **Health** | Where drive health comes from (your Scrutiny, or built-in SMART), and the failing-drive dot. |
 | **Look** | The default theme, view and units for people who haven't picked their own. |
-| **Security** | Who can open the page: anyone, an admin login, or your reverse proxy. |
+| **Security** | Who can open the page: anyone, an admin login, your reverse proxy, or sign-in with OIDC, plus a helper that writes a VoidAuth setup for you. |
 | **Backup** | Export and import the config. |
 
 <p align="center"><img src="docs/media/settings-devices.png" width="760" alt="Settings: the device list"></p>
 <p align="center"><img src="docs/media/settings-device.png" width="760" alt="Settings: editing one device"></p>
 <p align="center"><img src="docs/media/settings-security.png" width="760" alt="Settings: security"></p>
+<p align="center"><img src="docs/media/settings-oidc.png" width="760" alt="Settings: sign in with OIDC, and the VoidAuth helper"></p>
 
 ---
 
@@ -364,7 +365,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **More login options.** OIDC, and a helper that writes a VoidAuth + Caddy setup for you.
 - **Phone apps** (iOS and Android) on the same JSON API.
 
 ---

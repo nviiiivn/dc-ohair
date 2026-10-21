@@ -1,5 +1,5 @@
 """Tests for the agent, collector config and hub helpers. Run: python3 -m unittest"""
-import base64, datetime, json, os, subprocess, sys, tempfile, unittest
+import base64, datetime, json, os, subprocess, sys, tempfile, time, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -230,6 +230,74 @@ class ScrutinyTest(unittest.TestCase):
         self.assertEqual((a['health']['state'], a['health']['temp']), ('ok', 34))
         self.assertEqual(b['health']['state'], 'failing')
         self.assertNotIn('health', c)
+
+
+class OidcTest(unittest.TestCase):
+    def setUp(self):
+        import http.server, threading, urllib.parse
+        test = self
+        self.issued = {}
+
+        class Provider(http.server.BaseHTTPRequestHandler):
+            def reply(self, obj):
+                body = json.dumps(obj).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                base = 'http://127.0.0.1:%d' % self.server.server_port
+                self.reply({'issuer': base, 'authorization_endpoint': base + '/authorize', 'token_endpoint': base + '/token'})
+
+            def do_POST(self):
+                form = dict(urllib.parse.parse_qsl(self.rfile.read(int(self.headers['Content-Length'])).decode()))
+                test.issued['form'] = form
+                base = 'http://127.0.0.1:%d' % self.server.server_port
+                claims = dict({'iss': base, 'aud': 'dc', 'exp': time.time() + 300, 'nonce': test.issued['nonce'],
+                               'email': 'me@example.com', 'sub': '42'}, **test.issued.get('extra', {}))
+                part = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip('=')
+                self.reply({'id_token': part({'alg': 'none'}) + '.' + part(claims) + '.', 'access_token': 'x'})
+
+            def log_message(self, *a):
+                pass
+        self.srv = http.server.HTTPServer(('127.0.0.1', 0), Provider)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.cfg = {'issuer': 'http://127.0.0.1:%d' % self.srv.server_port, 'client_id': 'dc', 'allowed_users': ['me@example.com']}
+
+    def tearDown(self):
+        self.srv.shutdown()
+
+    def login(self):
+        import oidc, urllib.parse, hashlib
+        url = oidc.start(self.cfg, 'https://dc.example.com/auth/callback', '/next')
+        q = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+        self.issued['nonce'] = q['nonce']
+        result = oidc.finish(self.cfg, q['state'], 'the-code')
+        verifier = self.issued['form']['code_verifier']
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
+        self.assertEqual(challenge, q['code_challenge'])
+        return result, q['state']
+
+    def test_good_login_and_replayed_state(self):
+        import oidc
+        (who, nxt), state = self.login()
+        self.assertEqual((who, nxt), ('me@example.com', '/next'))
+        with self.assertRaises(ValueError):
+            oidc.finish(self.cfg, state, 'the-code')
+
+    def test_strangers_and_wrong_audience_are_refused(self):
+        self.issued['extra'] = {'email': 'someone@example.com', 'sub': '7'}
+        with self.assertRaises(ValueError):
+            self.login()
+        self.issued['extra'] = {'aud': 'another-app'}
+        with self.assertRaises(ValueError):
+            self.login()
+
+    def test_plain_http_issuers_are_refused(self):
+        import oidc
+        with self.assertRaises(ValueError):
+            oidc.check_issuer('http://auth.example.com')
 
 
 class CommandGuardTest(unittest.TestCase):

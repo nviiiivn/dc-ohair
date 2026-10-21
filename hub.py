@@ -8,17 +8,19 @@ and hosts the settings page and first-run wizard.
 Scanning is read-only: nothing here deletes or moves anything on any device.
 With no config file the hub starts empty and the page runs the setup wizard.
 """
-import argparse, base64, datetime, glob, gzip, hashlib, hmac, ipaddress, json, os, secrets, threading, time, urllib.request
+import argparse, base64, datetime, glob, gzip, hashlib, hmac, ipaddress, json, os, secrets, threading, time, urllib.parse, urllib.request
+from html import escape as html_escape
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import collect
 import notify as notifier
+import oidc
 from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.6.1'
+VERSION = '0.7.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
@@ -144,7 +146,7 @@ def commands_in(cfg):
         if isinstance(d, dict) and d.get('password_cmd'):
             out.add(json.dumps(d['password_cmd']))
     hubcfg = cfg.get('hub') or {}
-    places = [hubcfg.get('health') or {}] + [c for c in hubcfg.get('notify') or [] if isinstance(c, dict)]
+    places = [hubcfg.get('health') or {}, hubcfg.get('oidc') or {}] + [c for c in hubcfg.get('notify') or [] if isinstance(c, dict)]
     for place in places:
         for k, v in place.items():
             if k.endswith('_cmd') and v:
@@ -170,7 +172,7 @@ class Hub:
 
     @property
     def auth(self):
-        """off (default), password (built-in login) or proxy (a reverse proxy vouches via a header)."""
+        """off (default), password (built-in login), proxy (a reverse proxy vouches via a header) or oidc."""
         return 'off' if self.demo else self.cfg['hub'].get('auth', 'off')
 
     # ----- data -----
@@ -314,7 +316,7 @@ class Hub:
                 d['paired'] = True
         return cfg
 
-    SECURITY_KEYS = ('auth', 'trusted_proxies', 'proxy_user_header', 'admin_password')
+    SECURITY_KEYS = ('auth', 'trusted_proxies', 'proxy_user_header', 'admin_password', 'oidc')
 
     def save_config(self, new, security=False):
         """Saves a config from the settings page. Login settings only change through /api/security."""
@@ -604,6 +606,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not dev:
                 return self.send_json({'error': 'unknown or revoked enrollment token'}, 401)
             return self.send_json(self.hub.push_spec(dev))
+        if path in ('/auth/login', '/auth/callback'):
+            return self.oidc_route(path, query)
         if path == '/theme-config.js':
             theme = dict(THEME_DEFAULTS, **(self.hub.cfg['hub'].get('theme') or {}))
             return self.send_bytes(('window.DC_THEME = %s;\n' % json.dumps(theme)).encode(), 'text/javascript')
@@ -611,6 +615,7 @@ class Handler(SimpleHTTPRequestHandler):
             hub = self.hub
             bind = hub.cfg['hub'].get('bind', '0.0.0.0')
             return self.send_json({'admin': self.is_admin(), 'auth': hub.auth, 'demo': bool(hub.demo), 'version': VERSION,
+                                   'login_name': (hub.cfg['hub'].get('oidc') or {}).get('name') or 'your login service',
                                    'password_set': bool(hub.cfg['hub'].get('admin_password')), 'local': self.is_local(),
                                    'exposed': hub.auth == 'off' and not hub.demo and not ipaddress.ip_address(bind).is_loopback,
                                    'setup': not hub.demo and not hub.cfg['devices']})
@@ -781,11 +786,65 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(dict(out, ok=True))
         return self.send_json({'error': 'not found'}, 404)
 
+    # ----- OpenID Connect -----
+
+    def redirect(self, url):
+        self.send_response(302)
+        self.send_header('Location', url)
+        for k, v in getattr(self, 'extra_headers', []):
+            self.send_header(k, v)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def callback_url(self):
+        cfg = self.hub.cfg['hub'].get('oidc') or {}
+        if cfg.get('redirect_url'):
+            return cfg['redirect_url']
+        proto = self.headers.get('X-Forwarded-Proto') or 'http'
+        host = self.headers.get('X-Forwarded-Host') or self.headers.get('Host') or 'localhost'
+        return '%s://%s/auth/callback' % (proto.split(',')[0].strip(), host.split(',')[0].strip())
+
+    def oidc_route(self, path, query):
+        hub = self.hub
+        q = dict(urllib.parse.parse_qsl(query))
+        cfg = hub.cfg['hub'].get('oidc') or {}
+        if hub.auth != 'oidc':
+            return self.redirect('/')
+        try:
+            if path == '/auth/login':
+                nxt = q.get('next', '/')
+                if not nxt.startswith('/') or nxt.startswith('//'):
+                    nxt = '/'
+                return self.redirect(oidc.start(cfg, self.callback_url(), nxt))
+            if not self.logins.allow(self.client_ip()):
+                raise ValueError('Too many tries. Wait ten minutes.')
+            if q.get('error'):
+                raise ValueError('The provider said: %s' % (q.get('error_description') or q['error']))
+            who, nxt = oidc.finish(cfg, q.get('state'), q.get('code', ''))
+        except (OSError, ValueError, KeyError) as e:
+            page = ('<!doctype html><meta charset="utf-8"><title>D.C. O\'HAIR</title><body style="font:16px system-ui;padding:2em">'
+                    '<h2>Couldn\'t sign you in</h2><p>%s</p><p><a href="/auth/login">Try again</a></p>' % html_escape(str(e)))
+            return self.send_bytes(page.encode(), 'text/html; charset=utf-8', 403)
+        self.set_session(hub.sessions.new(), SESSION_DAYS * 86400)
+        return self.redirect(nxt)
+
     def security(self, data):
         hub = self.hub
         mode = data.get('auth')
-        if mode not in ('off', 'password', 'proxy'):
-            return self.send_json({'error': 'auth must be off, password or proxy'}, 400)
+        if mode not in ('off', 'password', 'proxy', 'oidc'):
+            return self.send_json({'error': 'auth must be off, password, proxy or oidc'}, 400)
+        if mode == 'oidc':
+            o = {k: v for k, v in (data.get('oidc') or {}).items() if v not in ('', None, [])}
+            if not o.get('client_id'):
+                return self.send_json({'error': 'Fill in the client ID.'}, 400)
+            if not o.get('allowed_users') and not o.get('allow_any_user'):
+                return self.send_json({'error': 'List at least one person who may sign in (their email or user name).'}, 400)
+            if hub.auth == 'off' and not self.is_local() and changed_commands(hub.cfg, {'hub': {'oidc': o}}):
+                return self.send_json({'error': 'With no login on, a client_secret_cmd can only be added from a browser on the hub.'}, 403)
+            try:
+                oidc.metadata(o, fresh=True)
+            except (OSError, ValueError) as e:
+                return self.send_json({'error': "Couldn't reach the provider's settings at that issuer: %s" % e}, 400)
         new = data.get('password') or ''
         if mode == 'password':
             if new and len(new) < 8:
@@ -802,10 +861,12 @@ class Handler(SimpleHTTPRequestHandler):
         if mode == 'proxy':
             cfg['hub']['trusted_proxies'] = [p for p in data.get('trusted_proxies') or ['127.0.0.1', '::1'] if p]
             cfg['hub']['proxy_user_header'] = data.get('proxy_user_header') or 'Remote-User'
+        if mode == 'oidc':
+            cfg['hub']['oidc'] = o
         hub.save_config(cfg, security=True)
         if new:
             hub.set_password(new)
-        if mode == 'password':
+        if mode in ('password', 'oidc'):
             self.set_session(hub.sessions.new(), SESSION_DAYS * 86400)
         return self.send_json({'auth': mode, 'admin': True})
 
@@ -884,6 +945,7 @@ def main():
     ap.add_argument('--bind', help='override hub.bind (default 0.0.0.0)')
     ap.add_argument('--no-schedule', action='store_true', help="don't run scheduled scans")
     ap.add_argument('--set-password', action='store_true', help='set the admin password from the terminal and exit')
+    ap.add_argument('--auth-off', action='store_true', help='turn the page login off again (if you locked yourself out) and exit')
     args = ap.parse_args()
     path = args.config or collect.CONFIG
     if args.demo:
@@ -893,6 +955,10 @@ def main():
     else:
         cfg = collect.load_config(path) if os.path.exists(path) else collect.validate({})
         hub = Hub(cfg, path)
+        if args.auth_off:
+            hub.cfg['hub']['auth'] = 'off'
+            collect.save_config(hub.cfg, path)
+            return print('Login is off again in', path)
         if args.set_password:
             import getpass
             pw = getpass.getpass('New admin password: ')

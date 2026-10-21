@@ -111,6 +111,14 @@ So:
 
 ---
 
+## Sign in with OIDC
+
+`hub.auth: oidc` sends people to your own login service (VoidAuth, Authelia, Authentik, Keycloak, Google…) with the authorization-code flow and PKCE. The hub checks the state, nonce, issuer, audience and expiry of what comes back, and lets in only the people on `allowed_users`. The ID token comes straight from the provider's token endpoint over HTTPS, which OpenID Connect Core (3.1.3.7) accepts in place of checking its signature; that's why the issuer has to be an `https://` address. The client secret comes from an environment variable or a command, never the config file. Sessions are the same 30-day httpOnly cookie as the admin login.
+
+**Settings → Security → Set up VoidAuth for me** writes the pieces for a [VoidAuth](https://github.com/voidauth/voidauth) setup: either a declared OIDC app (client `dcohair`, the redirect URL, `client_secret_post`, a freshly made secret) plus the hub's settings, or a Caddy `forward_auth` block for proxy mode that still lets push agents reach their four endpoints with their own tokens.
+
+Locked out by a wrong setting? Run `python3 hub.py --auth-off` on the hub (in Docker: `docker compose exec dc-ohair python3 hub.py --auth-off`, then restart).
+
 ## Reverse proxy examples
 
 ### Caddy + Authelia
