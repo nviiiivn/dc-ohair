@@ -16,10 +16,15 @@ spec = {"mode": "hash", "files": [[path, size], ...], "full": false, "budget": b
     left is reported as not done, for the next run.
 spec = {"mode": "empty", "roots": [...], "exclude": [...]}    empty folders
 spec = {"mode": "broken", "roots": [...], "exclude": [...]}   symlinks to nothing
+spec = {"mode": "secrets", "roots": [...], "rules": [...], ...}  (toolbox/secret_rules.py)
+    Keys and passwords in text files, and files that are secrets by name.
+    Each finding is the file, the line, the rule and a 12-character
+    fingerprint of the secret (so one key in five files reads as one key);
+    the secret itself is never printed, sent or kept.
 
 Nothing is ever written, moved or deleted.
 """
-import base64, fnmatch, hashlib, json, os, stat, sys, time
+import base64, fnmatch, hashlib, json, math, os, re, stat, sys, time
 
 HEAD, TAIL, CHUNK = 4096, 16384, 1 << 20
 spec = json.loads(base64.b64decode(sys.argv[1]).decode()) if len(sys.argv) > 1 else {}
@@ -105,9 +110,71 @@ def do_broken():
     return {'broken': found[:20000], 'more': max(0, len(found) - 20000)}
 
 
+def entropy(s):
+    if not s:
+        return 0.0
+    n = float(len(s))
+    return -sum(c / n * math.log(c / n, 2) for c in (s.count(ch) for ch in set(s)))
+
+
+def do_secrets():
+    rules = [(rid, re.compile(rx), [k.lower() for k in kw], ent) for rid, _what, rx, kw, ent in spec.get('rules', [])]
+    names = [(rid, re.compile(rx)) for rid, _what, rx in spec.get('names', [])]
+    stop = [w.lower() for w in spec.get('stopwords', [])]
+    skip_dirs = spec.get('skip_dirs', [])
+    skip_ext = set(spec.get('skip_ext', []))
+    max_file = spec.get('max_file', 1024 * 1024)
+    deadline = time.time() + spec.get('seconds', 1800)
+    found, files, unread = [], 0, 0
+
+    def skipped(root, dirpath):
+        # Relative to the root asked for, so a root that is itself under /tmp or /usr is still searched.
+        p = '/' + os.path.relpath(dirpath, root).replace(os.sep, '/') + '/'
+        return any('/' + d + '/' in p for d in skip_dirs)
+
+    for root, (dirpath, dirs, fnames) in ((rt, w) for rt in spec.get('roots', []) for w in walk([rt], spec.get('exclude', []))):
+        if time.time() > deadline:
+            return {'findings': found, 'files': files, 'unread': unread, 'stopped': 'out of time'}
+        dirs[:] = [d for d in dirs if not skipped(root, os.path.join(dirpath, d))]
+        for name in fnames:
+            path = os.path.join(dirpath, name)
+            rel = path.replace(os.sep, '/')
+            for rid, rx in names:
+                if rx.search(rel):
+                    found.append({'path': path, 'rule': rid, 'line': 0, 'by': 'name'})
+            if os.path.splitext(name)[1].lower() in skip_ext:
+                continue
+            try:
+                st = os.lstat(path)
+                if not stat.S_ISREG(st.st_mode) or st.st_size > max_file or not st.st_size:
+                    continue
+                with open(path, 'rb') as f:
+                    raw = f.read(max_file)
+            except OSError:
+                unread += 1
+                continue
+            if b'\0' in raw[:8192]:
+                continue            # binary
+            files += 1
+            text = raw.decode('utf-8', 'replace')
+            low = text.lower()
+            for rid, rx, kws, ent in rules:
+                if kws and not any(k in low for k in kws):
+                    continue
+                for m in rx.finditer(text):
+                    secret = m.group(1) if m.lastindex else m.group(0)
+                    if entropy(secret) < ent or any(w in secret.lower() for w in stop):
+                        continue
+                    found.append({'path': path, 'rule': rid, 'line': text.count('\n', 0, m.start()) + 1, 'by': 'content',
+                                  'fp': hashlib.sha256(secret.encode()).hexdigest()[:12]})
+                    if len(found) > 20000:
+                        return {'findings': found, 'files': files, 'unread': unread, 'stopped': 'too many'}
+    return {'findings': found, 'files': files, 'unread': unread}
+
+
 def main():
     mode = spec.get('mode')
-    fn = {'hash': do_hash, 'empty': do_empty, 'broken': do_broken}.get(mode)
+    fn = {'hash': do_hash, 'empty': do_empty, 'broken': do_broken, 'secrets': do_secrets}.get(mode)
     out = fn() if fn else {'error': 'unknown mode %r' % mode}
     out['tools_agent'] = 1
     json.dump(out, sys.stdout)

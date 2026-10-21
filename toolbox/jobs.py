@@ -1,15 +1,19 @@
 """The toolbox's long jobs, one at a time, in a thread of the hub.
 
 A job goes device by device (so no two devices are read at once, and the hub
-stays light) and keeps its progress where the page can poll it. Today's one
-job is checking duplicates: the tools agent reads the start and end of every
-file in a same-size set ("partial"), or, if she asks, every byte ("full"),
-and the answers are kept in data/toolbox/hashes.json for the next report.
+stays light) and keeps its progress where the page can poll it. Two jobs:
+
+- Checking duplicates: the tools agent reads the start and end of every file
+  in a same-size set ("partial"), or, if she asks, every byte ("full"); the
+  answers are kept in data/toolbox/hashes.json for the next report.
+- The secret finder: the tools agent searches each device's drives for keys
+  and passwords (secret_rules.py) and sends back where they are, never what
+  they are; kept in data/toolbox/secrets.json.
 """
 import json, os, threading, time
 
 import collect
-from . import dupes
+from . import dupes, secret_rules
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS_AGENT = os.path.join(HERE, 'tools_agent.py')
@@ -19,21 +23,21 @@ state = {'running': False}
 DEMO_STORE = {}                     # demo mode's pretend hashes: never written to disk
 
 
-def store_path():
+def store_path(name='hashes.json'):
     from .api import TOOLS
-    return os.path.join(TOOLS, 'hashes.json')
+    return os.path.join(TOOLS, name)
 
 
-def load_store():
+def load_store(name='hashes.json'):
     try:
-        with open(store_path()) as f:
+        with open(store_path(name)) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
 
 
-def save_store(store):
-    path = store_path()
+def save_store(store, name='hashes.json'):
+    path = store_path(name)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + '.tmp'
     with open(tmp, 'w') as f:
@@ -150,3 +154,82 @@ def _pretend(report, dev_id, files, full):
         if full:
             out[path]['full'] = 'f' + tag
     return {'hashes': out}
+
+
+# ----- the secret finder -----
+
+DEMO_SECRETS = {}
+
+
+def secrets_for(hub):
+    return DEMO_SECRETS if hub.demo else load_store('secrets.json')
+
+
+def start_secrets(hub, only=None):
+    """Search every device's drives (or [only]) for secrets in the background. False if a job is running."""
+    with lock:
+        if state.get('running'):
+            return False
+        state.clear()
+        state.update(running=True, kind='secrets', started=time.time(), devices={})
+    threading.Thread(target=_secrets, args=(hub, only), daemon=True).start()
+    return True
+
+
+def _secrets(hub, only):
+    try:
+        devs = [d for d in hub.cfg['devices'] if not only or d['id'] in only]
+        store = secrets_for(hub)
+        with lock:
+            state['devices'] = {d['id']: {'state': 'waiting'} for d in devs}
+        for dev in devs:
+            with lock:
+                state['devices'][dev['id']]['state'] = 'reading'
+            roots = [dr['path'] for dr in dev.get('drives', []) if dr.get('path')]
+            exclude = [x for dr in dev.get('drives', []) for x in dr.get('exclude') or []]
+            if hub.demo:
+                time.sleep(0.6)
+                out, err = _pretend_secrets(dev['id'], roots), None
+            else:
+                hours = hub.cfg['scan'].get('timeout_hours', 4)
+                out, err = collect.run_agent(dev, secret_rules.spec(roots, exclude), int(hours * 3600), script=TOOLS_AGENT)
+                if err and 'older agent' in err:
+                    err = ("This device's key lets the hub run only the scanner, which never reads a file. To let the "
+                           "toolbox look here too, add the tools line (Tools → How to allow it) to the device.")
+            rec = {'when': int(time.time()), 'roots': roots, 'error': err or (out or {}).get('error')}
+            if out and 'findings' in out:
+                rec.update(findings=out['findings'], files=out.get('files', 0), unread=out.get('unread', 0),
+                           stopped=out.get('stopped'))
+            elif dev['id'] in store and store[dev['id']].get('findings') is not None:
+                rec['findings'] = store[dev['id']]['findings']      # keep the last good answer
+                rec['stale'] = True
+            store[dev['id']] = rec
+            if not hub.demo:
+                save_store(store, 'secrets.json')
+            with lock:
+                state['devices'][dev['id']].update(state='failed' if rec['error'] else 'done',
+                                                   found=len(rec.get('findings') or []), error=rec['error'])
+    except Exception as e:  # a job must never take the hub down
+        with lock:
+            state['error'] = str(e)
+    finally:
+        with lock:
+            state.update(running=False, finished=time.time())
+
+
+def _pretend_secrets(dev_id, roots):
+    """Demo mode: the kinds of thing the finder turns up, at made-up paths."""
+    base = (roots or ['/home'])[0].rstrip('/')
+    made = [('%s/home/sam/projects/shop/.env' % base, 'env-file', 0, 'name'),
+            ('%s/home/sam/projects/shop/.env' % base, 'stripe-access-token', 4, 'content'),
+            ('%s/home/sam/projects/shop/deploy.sh' % base, 'aws-access-token', 12, 'content'),
+            ('%s/home/sam/.ssh/id_ed25519' % base, 'ssh-private-key-file', 0, 'name'),
+            ('%s/home/sam/.ssh/id_ed25519' % base, 'private-key', 1, 'content'),
+            ('%s/home/sam/notes/router.txt' % base, 'url-password', 3, 'content'),
+            ('%s/home/sam/bots/discord-bot/config.json' % base, 'discord-api-token', 7, 'content')]
+    pick = made[:3 + (sum(map(ord, dev_id)) % 5)]
+    import hashlib
+    # The same made-up key on every device, as one reused key would be.
+    fp = lambda r: hashlib.sha256(r.encode()).hexdigest()[:12]
+    return {'findings': [dict({'path': p, 'rule': r, 'line': n, 'by': by}, **({'fp': fp(r)} if by == 'content' else {}))
+                         for p, r, n, by in pick], 'files': 1200 + 37 * len(dev_id), 'unread': 0}
