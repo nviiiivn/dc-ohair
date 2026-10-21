@@ -28,6 +28,8 @@ let job = null;           // /api/tools/jobs while a check runs, and its last re
 let keyLine = '';
 let secrets = null;       // /api/tools/secrets: where keys and passwords are, never what
 let secretsError = '';
+let extras = null;        // /api/tools/extras
+let extrasError = '';
 
 async function getJSON(url, post) {
   const r = await fetch(url, post === undefined ? { credentials: 'same-origin' }
@@ -82,6 +84,46 @@ function secretsHTML() {
   return head + (failed ? `<ul class="job">${failed}</ul>` : '') + `<ul class="groups">${list}</ul>`;
 }
 
+const ago = (t) => new Date(t * 1000).toLocaleDateString();
+const row = (f, name, sub, right, extra = '') => `<li class="grp"><div class="row" data-go="${esc(f.device + '\t' + f.path)}"><span class="nm">${esc(name)}<small>${esc(sub)}</small></span><b>${right}${extra}</b></div></li>`;
+
+function extrasHTML() {
+  if (extrasError) return `<p class="muted">${esc(extrasError)}</p>`;
+  if (!extras) return '<p class="muted">Loading…</p>';
+  const g = extras.growth, b = extras.big_old;
+  const grew = g.since === null
+    ? '<p class="muted">Disk City keeps folder sizes from today on. Come back in a week to see what grew.</p>'
+    : g.grew.length ? (() => {
+      const one = (x) => row(x, x.folder === '/' ? x.drive : x.folder.split('/').pop(), `${x.device_name} · ${x.path}`, `+${size(x.grew)}`, `<small>now ${size(x.now)}</small>`);
+      const rest = g.grew.slice(6);
+      return `<ul class="groups">${g.grew.slice(0, 6).map(one).join('')}</ul>${rest.length ? `<details><summary>${rest.length} more folders that grew</summary><ul class="groups">${rest.map(one).join('')}</ul></details>` : ''}`;
+    })()
+      : `<p class="muted">Nothing grew by more than a GiB since ${ago(g.since)}.</p>`;
+  const landed = g.landed.length ? `<details><summary>${g.landed_count.toLocaleString()} big files landed this week: ${size(g.landed_bytes)}</summary><ul class="groups">${g.landed.slice(0, 40).map((f) => row(f, f.path.split('/').pop(), `${f.device_name} · ${f.path}`, size(f.size), `<small>${ago(f.mtime)}</small>`)).join('')}</ul></details>` : '';
+  const aged = (f) => row(f, f.path.split('/').pop(), `${f.device_name} · ${f.path}`, size(f.size), `<small>${Math.round(f.age_days / 36.5) / 10} years</small>`);
+  const old = b.files.length ? `<ul class="groups">${b.files.slice(0, 6).map(aged).join('')}</ul>${b.files.length > 6 ? `<details><summary>${Math.min(b.files.length, 200) - 6} more</summary><ul class="groups">${b.files.slice(6).map(aged).join('')}</ul></details>` : ''}` : '<p class="muted">Nothing big has sat untouched for a year.</p>';
+  const busy = job && job.running;
+  const listed = extras.tidy.filter((t) => t.when);
+  const tidy = listed.map((t) => `<details><summary><b>${esc(t.name)}</b>: ${(t.empty || []).length.toLocaleString()} empty folders, ${(t.broken || []).length.toLocaleString()} broken links${t.error ? ` · ${esc(t.error)}` : ''}</summary>
+      <ul class="plain">${(t.empty || []).slice(0, 200).map((p) => `<li>${esc(p)}</li>`).join('')}${(t.broken || []).slice(0, 200).map(([p, to]) => `<li>${esc(p)} <small>→ ${esc(to)}, which is not there</small></li>`).join('')}</ul></details>`).join('');
+  return `<h3>Grew this week${g.since ? ` <small>since ${ago(g.since)}</small>` : ''}</h3>${grew}${landed}
+    <h3>Big and old <small>${b.count.toLocaleString()} files not changed in a year: ${size(b.bytes)}</small></h3>${old}
+    <h3>Empty folders and broken links</h3>
+    <p><button type="button" class="ghost" data-tidy ${busy ? 'disabled' : ''}>${listed.length ? 'List them again' : 'List them'}</button>
+      <span class="muted">Only folders are listed; no file is opened or changed.</span></p>
+    ${job && job.kind === 'tidy' ? jobHTML() : ''}${tidy}`;
+}
+
+async function loadExtras() {
+  try {
+    extras = await getJSON('/api/tools/extras');
+    extrasError = '';
+  } catch (e) {
+    extrasError = e.message;
+  }
+  render();
+}
+
 function checkHTML() {
   const busy = job && job.running;
   return `<div class="check">
@@ -97,7 +139,7 @@ async function poll() {
   job = await getJSON('/api/tools/jobs').catch(() => job);
   render();
   if (job && job.running) setTimeout(poll, 2000);
-  else if (job && job.finished) (job.kind === 'secrets' ? loadSecrets() : load());
+  else if (job && job.finished) ({ secrets: loadSecrets, tidy: loadExtras }[job.kind] || load)();
 }
 
 async function loadSecrets() {
@@ -151,6 +193,7 @@ function render() {
   if (!open) return;
   let body;
   if (tab === 'secrets') body = secretsHTML();
+  else if (tab === 'extras') body = extrasHTML();
   else if (error) body = `<p class="muted">${esc(error)}</p>`;
   else if (!report) body = '<p class="muted">Looking through every drive…</p>';
   else {
@@ -170,7 +213,8 @@ function render() {
   box.innerHTML = `<header><div class="seg float" role="group" aria-label="Tools">
       <button type="button" data-tab="films" aria-pressed="${tab === 'films'}">Same film</button>
       <button type="button" data-tab="bytes" aria-pressed="${tab === 'bytes'}">Same bytes</button>
-      <button type="button" data-tab="secrets" aria-pressed="${tab === 'secrets'}">Secrets</button></div>
+      <button type="button" data-tab="secrets" aria-pressed="${tab === 'secrets'}">Secrets</button>
+      <button type="button" data-tab="extras" aria-pressed="${tab === 'extras'}">Extras</button></div>
       <button type="button" class="x" data-close aria-label="Close the toolbox">✕</button></header>
     <div class="scroll">${body}</div>`;
 }
@@ -228,14 +272,28 @@ function setup() {
       getJSON('/api/tools/key').then((r) => { keyLine = r.line; render(); $('#toolbox [data-key]').open = true; }).catch(() => {});
       return;
     }
-    if (t.closest('details, pre')) return;
+    if (t.closest('[data-key], pre')) return;
     const tb = t.closest('[data-tab]');
     if (tb) {
       tab = tb.dataset.tab;
       shown = null;
       city()?.mark([]);
       if (tab === 'secrets' && !secrets) loadSecrets();
+      if (tab === 'extras' && !extras) loadExtras();
       return render();
+    }
+    if (t.closest('[data-tidy]')) {
+      getJSON('/api/tools/extras/scan', {}).then((j) => { job = j; render(); poll(); }).catch((e) => { extrasError = e.message; render(); });
+      return;
+    }
+    const go = t.closest('[data-go]');
+    if (go) {
+      const [device, path] = go.dataset.go.split('\t');
+      open = false;
+      render();
+      city()?.mark([{ device, path }], MARK);
+      city()?.goTo(device, path);
+      return;
     }
     if (t.closest('[data-secrets]')) return findSecrets();
     const sfile = t.closest('[data-sfile]');

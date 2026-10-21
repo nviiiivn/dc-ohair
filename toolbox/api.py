@@ -10,13 +10,15 @@ reachable by anyone the rest of the API would turn away.
     GET  /api/tools/key                 the authorized_keys line that lets the hub run only the tools agent
     POST /api/tools/secrets/scan        {"devices": [...]} look for keys and passwords on the devices
     GET  /api/tools/secrets             where they are (never what they are), per device
+    GET  /api/tools/extras              what grew this week, big old files, empty folders, broken links
+    POST /api/tools/extras/scan         {"devices": [...]} list empty folders and broken links again
 
 The secret finder is guarded like the hub's *_cmd settings: with no login
 turned on, only a browser on the hub itself may run it or see what it found.
 """
 import os
 
-from . import dupes, jobs, secret_rules
+from . import dupes, extras, jobs, secret_rules
 
 DATA = os.environ.get('DC_DATA', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data'))
 TOOLS = os.path.join(DATA, 'toolbox')
@@ -59,6 +61,15 @@ def get(h, path, query):
         r['groups_bytes'], r['groups_films'] = len(r['bytes']), len(r['films'])
         r['bytes'], r['films'] = r['bytes'][:LIMIT], r['films'][:LIMIT]
         return h.send_json(r)
+    if path == '/api/tools/extras':
+        city = h.hub.city()
+        if not h.hub.demo:
+            extras.remember(city, DATA)
+        names = {d['id']: d['name'] for d in h.hub.cfg['devices']}
+        tidy = jobs.tidy_for(h.hub)
+        return h.send_json({'growth': extras.growth(city, demo_sizes(city) if h.hub.demo else DATA),
+                            'big_old': extras.big_and_old(city),
+                            'tidy': [dict(rec, id=i, name=names.get(i, i)) for i, rec in tidy.items()]})
     if path == '/api/tools/jobs':
         return h.send_json(jobs.status())
     if path == '/api/tools/key':
@@ -73,7 +84,40 @@ def get(h, path, query):
     return h.send_json({'error': 'not found'}, 404)
 
 
+_demo_dir = []
+
+
+def demo_sizes(city):
+    """Demo mode: a made-up copy of the folder sizes from eight days ago, a few folders
+    smaller, in a temporary folder (never the hub's data), so What grew has something to show."""
+    if not _demo_dir:
+        import gzip, json, tempfile, time
+        _demo_dir.append(tempfile.mkdtemp(prefix='dc-demo-sizes-'))
+        folder = os.path.join(_demo_dir[0], 'toolbox', 'sizes')
+        os.makedirs(folder)
+        for dev_id, drives in extras.folder_sizes(city).items():
+            for folders in drives.values():
+                for i, p in enumerate(sorted(folders)):
+                    if i % 7 == 3 and folders[p] > 8 * 1024 ** 3:
+                        folders[p] = int(folders[p] * 0.82)
+            with gzip.open(os.path.join(folder, dev_id + '.jsonl.gz'), 'wt') as f:
+                f.write(json.dumps({'t': int(time.time()) - 8 * 86400, 'drives': drives}) + '\n')
+    return _demo_dir[0]
+
+
+def after_scan(hub):
+    """hub.py calls this when a scan finishes: keep today's folder sizes for what-grew."""
+    if not hub.demo:
+        try:
+            extras.remember(hub.city(), DATA)
+        except Exception as e:  # never let the toolbox break a scan
+            print('toolbox: could not keep folder sizes:', e, flush=True)
+
+
 def post(h, path, data):
+    if path == '/api/tools/extras/scan':
+        started = jobs.start_tidy(h.hub, set(data.get('devices') or []) or None)
+        return h.send_json(dict(jobs.status(), started=started), 202 if started else 409)
     if path == '/api/tools/secrets/scan':
         if _guarded(h):
             return

@@ -32,3 +32,9 @@
 #toolbox .job { list-style: none; padding: 0; margin: 4px 0 0; }
 #toolbox .job li { padding: 2px 0; }
 #toolbox .job small { display: block; color: var(--text2); }
+#toolbox h3 { font-size: 13px; margin: 14px 0 4px; }
+#toolbox h3 small, #toolbox summary small { color: var(--text2); font-weight: 400; }
+#toolbox details { margin: 4px 0; }
+#toolbox summary { cursor: pointer; padding: 4px 0; }
+#toolbox .plain { margin: 2px 0 6px 16px; padding: 0; font-size: 12px; }
+#toolbox .plain li { overflow-wrap: anywhere; }

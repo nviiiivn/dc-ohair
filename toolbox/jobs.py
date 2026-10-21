@@ -233,3 +233,67 @@ def _pretend_secrets(dev_id, roots):
     fp = lambda r: hashlib.sha256(r.encode()).hexdigest()[:12]
     return {'findings': [dict({'path': p, 'rule': r, 'line': n, 'by': by}, **({'fp': fp(r)} if by == 'content' else {}))
                          for p, r, n, by in pick], 'files': 1200 + 37 * len(dev_id), 'unread': 0}
+
+
+# ----- empty folders and broken links -----
+
+DEMO_TIDY = {}
+
+
+def tidy_for(hub):
+    return DEMO_TIDY if hub.demo else load_store('tidy.json')
+
+
+def start_tidy(hub, only=None):
+    """List empty folders and broken symlinks on every device's drives. False if a job is running."""
+    with lock:
+        if state.get('running'):
+            return False
+        state.clear()
+        state.update(running=True, kind='tidy', started=time.time(), devices={})
+    threading.Thread(target=_tidy, args=(hub, only), daemon=True).start()
+    return True
+
+
+def _tidy(hub, only):
+    try:
+        devs = [d for d in hub.cfg['devices'] if not only or d['id'] in only]
+        store = tidy_for(hub)
+        with lock:
+            state['devices'] = {d['id']: {'state': 'waiting'} for d in devs}
+        for dev in devs:
+            with lock:
+                state['devices'][dev['id']]['state'] = 'reading'
+            roots = [dr['path'] for dr in dev.get('drives', []) if dr.get('path')]
+            exclude = [x for dr in dev.get('drives', []) for x in dr.get('exclude') or []]
+            rec, err = {'when': int(time.time()), 'roots': roots}, None
+            for mode in ('empty', 'broken'):
+                if hub.demo:
+                    out = {'empty': ['%s/Downloads/old' % roots[0].rstrip('/'), '%s/Movies/Unsorted' % roots[0].rstrip('/')],
+                           'broken': [['%s/home/sam/current-game' % roots[0].rstrip('/'), '/mnt/games/Old Game']]}
+                else:
+                    hours = hub.cfg['scan'].get('timeout_hours', 4)
+                    out, err = collect.run_agent(dev, {'mode': mode, 'roots': roots, 'exclude': exclude},
+                                                 int(hours * 3600), script=TOOLS_AGENT)
+                if err:
+                    if 'older agent' in err:
+                        err = ("This device's key lets the hub run only the scanner. To let the toolbox list "
+                               "folders here too, add the tools line (Tools → How to allow it) to the device.")
+                    break
+                rec[mode] = out.get(mode, [])
+                rec[mode + '_more'] = out.get('more', 0)
+            rec['error'] = err
+            if err and dev['id'] in store:
+                rec = dict(store[dev['id']], error=err, stale=True)
+            store[dev['id']] = rec
+            if not hub.demo:
+                save_store(store, 'tidy.json')
+            with lock:
+                state['devices'][dev['id']].update(state='failed' if err else 'done', error=err,
+                                                   found=len(rec.get('empty') or []) + len(rec.get('broken') or []))
+    except Exception as e:  # a job must never take the hub down
+        with lock:
+            state['error'] = str(e)
+    finally:
+        with lock:
+            state.update(running=False, finished=time.time())

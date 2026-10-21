@@ -444,6 +444,7 @@ class Hub:
     def _scan(self, only):
         try:
             collect.collect_all(self.cfg, only)
+            tools.after_scan(self)
             self.notify()
         finally:
             self.running = False
