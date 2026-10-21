@@ -27,6 +27,13 @@ python3 sync.py                 # copies ../demo.py and ../agent.py into src/sha
 cd src && ../.venv/bin/python main.py
 ```
 
+## Install it
+
+Each [release](https://github.com/nviiiivn/diskcity/releases) has both builds attached.
+
+- **Android**: download the `.apk` on the phone and open it; Android asks once to allow installing apps from your browser or files app. A newer build may refuse to install over an older one (each build is signed by GitHub's runner); uninstall the old one first.
+- **iPhone and iPad**: the `-unsigned.ipa` has to be signed with your own Apple ID before it installs. [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) do that for free; with a free Apple ID the app needs re-signing every 7 days, which AltStore does by itself.
+
 ## Build it
 
-The release workflow builds the Android APK and the iOS app on GitHub's free runners and attaches them to each release. To build an APK yourself, install the Flet CLI (`pip install flet-cli==1.0.4`) and run `flet build apk` in `app/`.
+The [app workflow](../.github/workflows/app.yml) builds the APK and the IPA on GitHub's free runners and attaches them to each release; run it by hand from the Actions tab for a test build. To build an APK yourself, install the Flet CLI (`pip install flet-cli==1.0.4`), then run `python3 sync.py` and `flet build apk` in `app/`.
