@@ -19,10 +19,21 @@ It's for anyone with a few machines and a pile of disks: a media server, a gamin
 - **Nothing to install on your devices.** The hub sends a small Python script over SSH and reads the answer. The device only needs `python3`.
 - **Self-hosted.** It's one small Python service plus a web page. No cloud and no account.
 
+## What you can do with it
+
+- **Find what's eating your space.** Every drive on every machine in one view: the biggest buildings are the biggest files. Prefer numbers? Press **List** for the biggest files below wherever you are.
+- **Compare your machines.** Devices sit side by side as districts, next to a table of Used, Free and Total, plus Music, Games, Series, Movies and Other for every drive.
+- **See what grew.** Each drive has a 90-day sparkline, and *Sort → Newest* lights up what just landed.
+- **Find anything.** Search every drive by name and fly straight to it.
+- **Hear about trouble.** A banner, and optional ntfy, Discord or email alerts, when a drive is almost full or (if you turn on health) starting to fail.
+- **Bring every device.** Linux, macOS, LibreELEC/Kodi and NAS boxes over SSH; Windows and out-of-reach machines with a one-line push agent; and a network search to find them all.
+- **Use it anywhere.** Mouse and keyboard, or touch on a phone or tablet, in six themes.
+
 ---
 
 ## Contents
 
+- [What you can do with it](#what-you-can-do-with-it)
 - [Quick start](#quick-start)
 - [Try it without your data](#try-it-without-your-data)
 - [First-run setup, step by step](#first-run-setup-step-by-step)
@@ -166,9 +177,9 @@ Big drives take a few minutes. After that, the hub rescans every day at 04:30, o
 
 | To | Mouse / keyboard | Touch |
 |---|---|---|
-| Look around | drag | one-finger drag |
+| Look around | drag | two-finger turn and tilt |
 | Zoom | scroll wheel | pinch |
-| Pan | right-drag | two-finger drag |
+| Move around | right-drag | one-finger drag |
 | Fly | W A S D, Q/E for down/up, Shift for faster | (none) |
 | Go inside | click a block | tap a block |
 | Go back up | Esc, Backspace, or **Back** | **Back** |
@@ -210,7 +221,7 @@ The color key at the bottom is also a filter. **Tap a chip** to hide or show tha
 
 The side pane lists every drive: **Used**, **Free**, **Total**, then **Music**, **Games**, **Series**, **Movies** and **Other**. Under each drive name there's a little bar showing what fills it, and a sparkline of how its used space changed over the last 90 days. A drive that's over the alert line (90% by default) gets a **⚠ 95% full** marker. Tap a row to fly to that drive.
 
-Hide the pane with the tab on its edge, and bring it back the same way. On a phone or narrow screen, the pane sits under the city instead.
+Hide the pane with the tab on its edge, and bring it back the same way. On a phone or tablet it becomes a sheet at the bottom instead (see below).
 
 <p align="center"><img src="docs/media/pane.gif" width="900" alt="Hiding and showing the side pane"></p>
 
@@ -233,13 +244,20 @@ Turn it on in **Settings → Health** with either source:
 Then it stays hidden. Press **Health** in the toolbar to see it: each drive gets an **OK / Warning / Failing** line in the table (temperature, power-on hours, reallocated and pending sectors) and a green, amber or red rim in the 3D views. Each drive's info card always shows its health. The only thing that ever shows without asking is a small red dot on a drive that's actually **failing**, and you can turn that off too.
 
 <p align="center"><img src="docs/media/health.png" width="760" alt="Health turned on: OK, warning and failing drives"></p>
+<p align="center"><img src="docs/media/settings-health.png" width="760" alt="Settings: where health comes from"></p>
+
+### On a phone or tablet
+
+On a narrow screen the drive table becomes a sheet at the bottom: drag it up or tap its handle to see it, and tap a drive to fly there. One finger moves around the city, a pinch zooms, and two fingers turn and tilt it.
+
+<p align="center"><img src="docs/media/phone.gif" width="30%" alt="Tapping into a drive on a phone"> <img src="docs/media/mobile.png" width="30%" alt="The city on a phone"> <img src="docs/media/mobile-sheet.png" width="30%" alt="The drive table as a bottom sheet"></p>
 
 ### Themes
 
 There are six themes: dark, light, sepia, cyberpunk, matrix and ocean. The whole scene follows the theme: sky, ground, grid, labels and the building colors. Each theme has its own five category colors, checked so they stay easy to tell apart for people with common kinds of color blindness.
 
 <p align="center"><img src="docs/media/themes.gif" width="900" alt="Cycling through the six themes"></p>
-<p align="center"><img src="docs/media/light.png" width="49%" alt="Light theme"> <img src="docs/media/mobile.png" width="25%" alt="On a phone"></p>
+<p align="center"><img src="docs/media/light.png" width="760" alt="Light theme"></p>
 
 If you run other sites on the same domain, the theme can follow a shared cookie, so picking a theme on one site changes it here too. See `hub.theme` in [docs/configuration.md](docs/configuration.md).
 

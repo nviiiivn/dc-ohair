@@ -536,6 +536,8 @@ controls.screenSpacePanning = false;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.minDistance = 2;
 controls.maxDistance = 6000;
+// touch works like a map: one finger moves around, pinch zooms, two fingers turn and tilt
+controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
 
 const hemi = new THREE.HemisphereLight('#a9c4ff', '#0b0d18', 1.1);
 scene.add(hemi);
@@ -753,6 +755,7 @@ function infoHTML(node) {
 }
 
 const card = $('#card');
+if (prefs.cardMin === undefined && matchMedia('(max-width: 600px)').matches) prefs.cardMin = true;
 card.classList.add('float', 'info');
 function showCard() {
   const node = selected || root;
@@ -858,7 +861,8 @@ let tween = null;
 let dirty = true;
 
 function overview() {
-  const k = layout ? layout.extent / (W / 2) : 1;
+  // tall phone screens need to stand further back to fit the city's width
+  const k = (layout ? layout.extent / (W / 2) : 1) * Math.pow(Math.max(1, 1.3 / camera.aspect), 0.85);
   return { pos: BASE_VIEW.pos.clone().multiplyScalar(k), target: BASE_VIEW.target.clone().multiplyScalar(k) };
 }
 
@@ -1104,6 +1108,7 @@ const tbody = $('#drives tbody');
 tbody.addEventListener('click', (e) => {
   const node = rowNode(e.target.closest('tr.drv'));
   if (!node || node === root) return;
+  if (narrow()) setPane(false);
   if (layout.bounds.has(node)) drill(node); else setRoot(node);
 });
 tbody.addEventListener('mouseover', (e) => {
@@ -1431,6 +1436,35 @@ function setPane(open) {
 }
 $('#paneToggle').addEventListener('click', () => setPane(document.body.classList.contains('pane-closed')));
 
+// on phones and portrait tablets the pane is a bottom sheet: drag its handle or header, or tap them
+const narrow = () => matchMedia('(max-width: 900px)').matches;
+const panel = $('#panel');
+let sheetDrag = null;
+panel.addEventListener('pointerdown', (e) => {
+  if (!narrow() || !e.target.closest('.grab, header')) return;
+  sheetDrag = { y: e.clientY, h: panel.offsetHeight, closed: document.body.classList.contains('pane-closed'), moved: false };
+  panel.setPointerCapture(e.pointerId);
+});
+panel.addEventListener('pointermove', (e) => {
+  if (!sheetDrag) return;
+  const dy = e.clientY - sheetDrag.y;
+  if (!sheetDrag.moved && Math.abs(dy) < 6) return;
+  sheetDrag.moved = true;
+  panel.classList.add('dragging');
+  const peek = sheetDrag.h - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--peek'));
+  panel.style.transform = `translateY(${Math.max(0, Math.min(peek, (sheetDrag.closed ? peek : 0) + dy))}px)`;
+});
+panel.addEventListener('pointerup', (e) => {
+  if (!sheetDrag) return;
+  const { moved, closed, y } = sheetDrag;
+  const dy = e.clientY - y;
+  sheetDrag = null;
+  panel.classList.remove('dragging');
+  panel.style.transform = '';
+  setPane(moved ? (dy < -40 ? true : dy > 40 ? false : !closed) : closed);
+});
+panel.addEventListener('pointercancel', () => { sheetDrag = null; panel.classList.remove('dragging'); panel.style.transform = ''; });
+
 // ---------- scans ----------
 
 const scanBtn = $('#scanNow');
@@ -1494,7 +1528,7 @@ $('#gear').addEventListener('click', () => openSettings(me));
 
 markView();
 legend();
-setPane(prefs.pane !== false);
+setPane(prefs.pane === undefined ? !narrow() : prefs.pane !== false);
 themeScene();
 if (!renderer.getContext()) {
   $('#msg').textContent = 'This browser cannot draw 3D (WebGL is off).';

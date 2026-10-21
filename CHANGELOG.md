@@ -8,6 +8,15 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
 
+## [0.6.1] - phones, tablets and a fresh coat
+
+### Changed
+- On phones and portrait tablets the drive table is a **bottom sheet**: drag or tap its handle, and tapping a drive flies there and tucks the sheet away.
+- Touch works like a map: one finger moves around, a pinch zooms, two fingers turn and tilt.
+- A tighter toolbar on phones, the info card starts small there, and the camera stands back far enough to fit the city on a tall screen.
+- The repository is now github.com/nviiiivn/diskcity; the product is still D.C. O'HAIR.
+- New screenshots and GIFs throughout the README.
+
 ## [0.6.0] - alerts and notifications
 
 ### Added

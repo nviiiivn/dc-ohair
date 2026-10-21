@@ -131,22 +131,29 @@ td.name svg polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; str
 td.zero, td.none { color: color-mix(in srgb, var(--text2) 60%, transparent); }
 tfoot td { border-top: 1px solid var(--border); font-weight: 650; padding-top: 8px; }
 
+/* phones and portrait tablets: the pane becomes a bottom sheet you drag or tap */
+#panel .grab { display: none; }
 @media (max-width: 900px) {
-  :root { --pane-w: 100vw; }
-  #app { flex-direction: column; height: auto; }
-  #stage { flex: none; height: 68vh; height: 68dvh; }
-  #panel { width: 100%; max-height: 2000px; border-left: 0; border-top: 1px solid var(--border);
-    transition: max-height .5s var(--ease-pop), opacity .35s; }
-  .pane-closed #panel { width: 100%; max-height: 0; }
+  :root { --pane-w: 100vw; --peek: 74px; }
+  #app { display: block; height: 100vh; height: 100dvh; }
+  #stage { height: 100vh; height: 100dvh; }
+  #panel { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; width: 100%; height: 72vh; height: 72dvh;
+    border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, .35);
+    transform: translateY(0); transition: transform .45s var(--ease-pop); opacity: 1; }
+  .pane-closed #panel { width: 100%; opacity: 1; border-left-width: 1px; transform: translateY(calc(100% - var(--peek))); }
+  #panel.dragging { transition: none; }
   #panel .inner { width: 100%; }
-  #paneToggle { top: auto; bottom: 0; right: 50%; margin: 0 -32px 0 0; width: 64px; height: 24px;
-    border-radius: 14px 14px 0 0; border: 1px solid var(--border); border-bottom: 0; }
-  #paneToggle:hover { width: 64px; height: 28px; }
-  #paneToggle svg { transform: rotate(90deg); }
-  .pane-closed #paneToggle svg { transform: rotate(-90deg); }
-  #card { width: 200px; max-height: 38%; bottom: 34px; }
-  #legend { right: 220px; bottom: 34px; }
-  #hint { font-size: 12px; }
+  #panel .grab { display: block; width: 100%; height: 20px; border: 0; background: none; padding: 0; cursor: grab; touch-action: none; }
+  #panel .grab::before { content: ""; display: block; width: 44px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: var(--text2); opacity: .7; }
+  #panel header { padding: 2px 16px 6px; touch-action: none; cursor: pointer; }
+  #panel header img { width: 30px; height: 30px; }
+  #panel h1 { font-size: 15px; }
+  #panel .tag { font-size: 11px; }
+  #paneToggle { display: none; }
+  #card { width: 200px; max-height: 38%; bottom: calc(var(--peek) + 44px); }
+  #legend { right: 220px; bottom: calc(var(--peek) + 10px); }
+  #hint { font-size: 12px; bottom: calc(var(--peek) + 74px); }
+  #list { bottom: calc(var(--peek) + 64px); }
 }
 
 /* ---------- toolbar extras ---------- */
@@ -260,12 +267,26 @@ footer .note { flex: 1; font-size: 13px; }
 
 /* phones: one scrolling row of chips, the card tucked under the toolbar */
 @media (max-width: 600px) {
-  #legend { left: 8px; right: 8px; bottom: 34px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  #legend { left: 8px; right: 8px; bottom: calc(var(--peek) + 8px); flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
   #legend > span { display: none; }
   #legend .chip, #legend .lg { flex: none; }
-  #hint { top: auto; bottom: 70px; left: 50%; transform: translateX(-50%); font-size: 11px; padding: 4px 10px; }
-  #card { top: 158px; bottom: auto; right: 8px; }
+  #hint { top: auto; bottom: calc(var(--peek) + 46px); left: 50%; transform: translateX(-50%); font-size: 11px; padding: 4px 10px; }
+  #card { top: auto; bottom: calc(var(--peek) + 48px); right: 8px; max-height: 45%; }
   #card:not(.min) { width: min(260px, calc(100vw - 16px)); }
+  #hint.quiet { display: none; }
+  #hint { bottom: calc(var(--peek) + 92px); }
+  /* a tighter toolbar so the city keeps most of the screen */
+  #top { gap: 6px; left: 8px; right: 8px; top: 8px; }
+  #controls { gap: 6px; }
+  #controls .seg button, #listBtn, #healthBtn { padding: 5px 9px; font-size: 13px; }
+  .pick, .chk { padding: 3px 8px; font-size: 13px; }
+  .pick .lbl, .chk .lbl { display: none; }
+  .swatches { gap: 4px; padding: 4px 6px; }
+  .swatches button { width: 16px; height: 16px; }
+  .swatches button::after { inset: 4px; }
+  #gear { width: 30px; height: 30px; }
+  .search { flex: 1 1 100%; }
+  #find, #find:focus { width: 100%; }
 }
 
 /* push agent: OS tabs and the pairing wait */
@@ -312,7 +333,7 @@ footer .note { flex: 1; font-size: 13px; }
 #list td.share i { display: block; height: 100%; background: var(--accent); }
 @media (max-width: 600px) {
   #find { width: 120px; }
-  #list { top: 150px; bottom: 70px; left: 6px; right: 6px; }
+  #list { top: 150px; bottom: calc(var(--peek) + 50px); left: 6px; right: 6px; }
 }
 #list th:first-child { text-align: left; }
 
