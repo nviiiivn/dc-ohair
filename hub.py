@@ -17,7 +17,7 @@ from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
@@ -390,6 +390,7 @@ class Handler(SimpleHTTPRequestHandler):
     logins = RateLimit(8, 600)
     probes = RateLimit(30, 60)
     reports = RateLimit(30, 60)
+    searches = RateLimit(4, 60)
 
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=WEB, **kw)
@@ -587,6 +588,22 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:  # yaml errors
                 return self.send_json({'error': 'Could not read that config: %s' % e}, 400)
             return self.send_json(self.settings_payload())
+        if path == '/api/discover':
+            if not self.searches.allow(self.client_ip()):
+                return self.send_json({'error': 'One search at a time; try again in a minute.'}, 429)
+            import discover
+            try:
+                found = discover.discover(data.get('network') or None)
+            except ValueError as e:
+                return self.send_json({'error': str(e)}, 400)
+            known = {}
+            for d in hub.cfg['devices']:
+                host = d.get('host') or collect.ssh_target(d).split('@')[-1]
+                if host:
+                    known[host] = d['name']
+            for h in found['hosts']:
+                h['known'] = known.get(h['ip']) or known.get(h['name']) or ''
+            return self.send_json(found)
         if path in ('/api/push/token', '/api/push/revoke'):
             dev_id = data.get('id', '')
             try:
@@ -661,6 +678,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({'ok': True, 'host': 'demo-box', 'mounts': hub.demo['mounts']})
         if path == '/api/push/token':
             return self.send_json({'token': 'demo-token-not-real', 'hub': 'http://192.0.2.5:7171'})
+        if path == '/api/discover':
+            time.sleep(1.2)
+            return self.send_json({'network': '192.0.2.0/24', 'hub': '192.0.2.5', 'hosts': hub.demo['found']})
         return self.send_json({'error': 'Not in demo mode.'}, 403)
 
     def settings_payload(self):

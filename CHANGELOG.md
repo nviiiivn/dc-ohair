@@ -5,12 +5,16 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- Opt-in LAN discovery with a yes/no checklist and "+ Add your own".
 - Search with fly-to.
 - Drive health (Scrutiny pairing or built-in smartctl), hidden by default.
 - Notifications: ntfy, Discord and email.
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.3.0] - find devices on my network
+
+### Added
+- **Find devices on my network** in the wizard and Settings → Devices: an opt-in search of the hub's own private network (or one you name, up to a /22) for machines answering on SSH, SMB, Mac file sharing or Synology ports. Each one shows its name (reverse DNS or Bonjour/mDNS), open ports, a guess at its system from the SSH greeting, and the network card's maker when an OUI list is installed. Tick yes for the ones to add; machines without SSH are set up to send their own reports. "+ Add your own" covers anything it missed.
 
 ## [0.2.0] - the push agent
 

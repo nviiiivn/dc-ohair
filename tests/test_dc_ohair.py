@@ -170,6 +170,25 @@ class PushTest(unittest.TestCase):
             self.hub.take_report(dev, {'nope': 1})
 
 
+class DiscoverTest(unittest.TestCase):
+    def test_only_small_private_networks(self):
+        import discover
+        self.assertEqual(str(discover.network('192.168.1.7/24')), '192.168.1.0/24')
+        for bad in ('8.8.8.0/24', '10.0.0.0/8', '127.0.0.0/24'):
+            with self.assertRaises(ValueError):
+                discover.network(bad)
+
+    def test_os_hint(self):
+        import discover
+        self.assertEqual(discover.os_hint('SSH-2.0-OpenSSH_for_Windows_9.5', [22]), 'Windows')
+        self.assertEqual(discover.os_hint('', [445]), 'Windows?')
+        self.assertEqual(discover.os_hint('SSH-2.0-OpenSSH_9.8', [22, 548]), 'Mac')
+
+    def test_random_macs_are_named_as_such(self):
+        import discover
+        self.assertEqual(discover.vendor('DA:A1:19:00:00:01'), 'private (random) address')
+
+
 class HubTest(unittest.TestCase):
     def test_clock_times_reads_yaml_sexagesimal(self):
         self.assertEqual(hub.clock_times(['04:30', 270, '23:05']), [(4, 30), (4, 30), (23, 5)])

@@ -141,6 +141,12 @@ You can also run it as a user service (`~/.config/systemd/user/`, with `WantedBy
 
 You can add devices in the setup wizard or in **Settings → Devices → + Add a device**.
 
+Not sure what's out there? Open **Find devices on my network**. The hub checks its own local network for machines that answer on SSH (22) or file sharing (445, 548, 5000), and lists each with its name, open ports and a guess at what it is. Tick the ones to add, then fill in the user for each. Machines that don't answer on SSH (usually Windows) are added as devices that send their own reports. It only runs when you press **Look for devices**, only on private networks, and never logs in to anything.
+
+<p align="center"><img src="media/discover.png" width="720" alt="Find devices on my network"></p>
+
+In Docker, the hub can only see Docker's own little network unless you give it the host's: swap `ports:` for `network_mode: host` in `docker-compose.yml`, or type your network (like `192.168.1.0/24`) into the search box. Install your distribution's `ieee-data` package (already in the Docker image) to see who made each network card.
+
 <p align="center"><img src="media/settings-device.png" width="720" alt="Editing a device in Settings"></p>
 
 1. **Name** it whatever you like: "Media NAS", "Desktop", "Laptop".

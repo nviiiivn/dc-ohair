@@ -149,4 +149,12 @@ def build():
         {'path': '/mnt/windows', 'label': 'windows', 'fs': 'ntfs3', 'source': '/dev/sdc3', 'total': 2 * TiB, 'used': int(1.4 * TiB), 'free': int(0.6 * TiB), 'readonly': True, 'network': False},
         {'path': '/media/usb', 'label': 'usb', 'fs': 'exfat', 'source': '/dev/sdd1', 'total': 1 * TiB, 'used': 300 * GiB, 'free': 724 * GiB, 'readonly': False, 'network': False},
     ]
-    return {'city': city, 'history': history, 'config': config, 'mounts': mounts}
+    found = [
+        {'ip': '192.0.2.1', 'name': 'router.lan', 'ports': ['SSH'], 'ssh': True, 'banner': 'SSH-2.0-dropbear', 'os': 'small Linux box', 'mac': '', 'vendor': '', 'known': ''},
+        {'ip': '192.0.2.10', 'name': 'nas.local', 'ports': ['SSH', 'SMB'], 'ssh': True, 'banner': 'SSH-2.0-OpenSSH_9.2p1 Debian', 'os': 'Debian', 'mac': '', 'vendor': '', 'known': 'Media NAS'},
+        {'ip': '192.0.2.20', 'name': 'macbook.local', 'ports': ['SSH', 'Mac file sharing'], 'ssh': True, 'banner': 'SSH-2.0-OpenSSH_9.8', 'os': 'Mac', 'mac': '', 'vendor': '', 'known': 'MacBook'},
+        {'ip': '192.0.2.44', 'name': 'livingroom-kodi.local', 'ports': ['SSH', 'SMB'], 'ssh': True, 'banner': 'SSH-2.0-OpenSSH_10.0', 'os': '', 'mac': '', 'vendor': '', 'known': ''},
+        {'ip': '192.0.2.50', 'name': 'gaming-pc.local', 'ports': ['SMB'], 'ssh': False, 'banner': '', 'os': 'Windows?', 'mac': '', 'vendor': '', 'known': ''},
+        {'ip': '192.0.2.61', 'name': 'backup-box.local', 'ports': ['SSH', 'Synology'], 'ssh': True, 'banner': 'SSH-2.0-OpenSSH_8.2', 'os': 'NAS', 'mac': '', 'vendor': '', 'known': ''},
+    ]
+    return {'city': city, 'history': history, 'config': config, 'mounts': mounts, 'found': found}

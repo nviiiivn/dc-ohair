@@ -208,6 +208,66 @@ function showPushCommand(box, dev, hub, token) {
   setTimeout(poll, 3000);
 }
 
+// ---------- opt-in network search ----------
+
+const nice = (h) => (h.name || '').replace(/\.(local|lan|home|localdomain)$/i, '') || h.ip;
+
+function uniqueId(devices, name) {
+  const base = slug(name);
+  let id = base, n = 2;
+  while (devices.some((d) => d.id === id)) id = `${base}-${n++}`;
+  return id;
+}
+
+function discoverBox() {
+  return `<details class="help find"><summary>Find devices on my network</summary>
+    <p>This looks through the hub's own local network for machines that answer on SSH or file sharing (ports 22, 445, 548 and 5000).
+      It only knocks on those ports. It doesn't log in or read anything.</p>
+    <div class="row"><input data-net placeholder="network, e.g. 192.168.1.0/24 (empty: the hub's own)" class="mono">
+      <button type="button" class="primary" data-find>Look for devices</button></div>
+    <div class="found-hosts" aria-live="polite"></div></details>`;
+}
+
+// a yes/no checklist of what answered; ticked ones become devices (SSH, or "sends to the hub" without SSH)
+function bindDiscover(root, devices, onAdded) {
+  root.addEventListener('click', async (e) => {
+    const out = root.querySelector('.found-hosts');
+    const find = e.target.closest('[data-find]');
+    if (find) {
+      find.disabled = true;
+      out.innerHTML = '<p class="waiting">Knocking on doors…</p>';
+      try {
+        const r = await api('/api/discover', { network: root.querySelector('[data-net]').value.trim() });
+        out.hosts = r.hosts;
+        out.innerHTML = r.hosts.length ? `<p class="muted">${r.hosts.length} answered on ${esc(r.network)}. Tick the ones to add.</p>
+          <div class="found-list">${r.hosts.map((h, i) => `<label class="found"><input type="checkbox" data-h="${i}" ${h.known ? 'checked disabled' : ''}>
+            <b>${esc(nice(h))}</b> <span class="mono">${esc(h.ip)}</span>
+            <span class="muted">${esc([h.ports.join(' · '), h.os, h.vendor].filter(Boolean).join(' · '))}</span>
+            ${h.known ? `<small class="ok">already added as ${esc(h.known)}</small>` : !h.ssh ? '<small class="warn">No SSH, so it will send its own reports instead.</small>' : ''}</label>`).join('')}</div>
+          <div class="row"><button type="button" class="primary" data-add-hosts>Add ticked devices</button>
+            <button type="button" class="ghost" data-add data-new>+ Add your own</button></div>`
+          : `<p class="muted">Nothing answered on ${esc(r.network)}.</p><div class="row"><button type="button" class="ghost" data-add data-new>+ Add your own</button></div>`;
+      } catch (err) {
+        out.innerHTML = `<p class="err">${esc(err.message)}</p>`;
+      } finally {
+        find.disabled = false;
+      }
+      return;
+    }
+    if (e.target.closest('[data-add-hosts]')) {
+      const added = [];
+      out.querySelectorAll('input[data-h]:checked:not(:disabled)').forEach((c) => {
+        const h = out.hosts[c.dataset.h];
+        const dev = { id: uniqueId(devices, nice(h)), name: nice(h), drives: [] };
+        if (h.ssh) Object.assign(dev, { host: h.ip, user: '' }); else dev.push = true;
+        devices.push(dev);
+        added.push(dev);
+      });
+      onAdded(added);
+    }
+  });
+}
+
 // wires a deviceForm rendered into `root` to the device object `dev`; persist() saves the config first when needed
 function bindDevice(root, dev, payload, rerender, persist) {
   root.addEventListener('input', (e) => {
@@ -401,7 +461,8 @@ function render(dlg) {
     S.saved = new Set(S.payload.config.devices.map((d) => d.id));
     html = `<ul class="devlist">${S.cfg.devices.map((d, i) => `<li><button type="button" data-edit="${i}">
         <b>${esc(d.name)}</b> <span class="muted">${d.local ? 'this machine' : d.push ? (d.paired ? 'sends its own reports' : 'waiting to be set up') : esc((d.user ? d.user + '@' : '') + (d.host || ''))} · ${d.drives.length} drive${d.drives.length === 1 ? '' : 's'}</span></button></li>`).join('')}</ul>
-      <div class="row"><button type="button" data-new>+ Add a device</button><button type="button" class="ghost" data-wizard>Run the setup wizard</button></div>`;
+      <div class="row"><button type="button" data-new>+ Add a device</button><button type="button" class="ghost" data-wizard>Run the setup wizard</button></div>
+      ${discoverBox()}`;
   } else if (S.tab === 'scanning') {
     const cat = scan.categories || {};
     const def = S.payload.category_defaults || {};
@@ -461,6 +522,14 @@ function render(dlg) {
   const fresh = el(`<section class="body">${html}</section>`);
   body.replaceWith(fresh);
   wire(fresh, dlg);
+  if (S.tab === 'devices') {
+    bindDiscover(fresh, S.cfg.devices, (added) => {
+      if (!added.length) return;
+      S.dirty = true;
+      S.editing = S.cfg.devices.indexOf(added[0]);
+      render(dlg);
+    });
+  }
 }
 
 function setPath(obj, path, value) {
@@ -598,12 +667,17 @@ export async function openWizard(me) {
       if (!here.drives.length && !W.detected) { W.detected = true; mine.querySelector('[data-act=detect]').click(); }
     } else if (W.step === 1) {
       const others = W.cfg.devices.filter((d) => !d.local);
-      fresh.innerHTML = `<p>Add your other computers and boxes. The hub reaches them over SSH with its own key; nothing gets installed on them.</p>
+      fresh.innerHTML = `<p>Add your other computers and boxes. The hub reaches them over SSH with its own key, so nothing gets installed on them.
+        Devices it can't reach can send their own reports instead.</p>
+        ${discoverBox()}
         <ul class="devlist">${others.map((d) => `<li><button type="button" data-open="${W.cfg.devices.indexOf(d)}"><b>${esc(d.name || 'new device')}</b>
-          <span class="muted">${esc((d.user ? d.user + '@' : '') + (d.host || ''))} · ${d.drives.length} drive${d.drives.length === 1 ? '' : 's'}</span></button></li>`).join('')}</ul>
-        <div class="row"><button type="button" data-add>+ Add a device</button></div><div class="editor"></div>
+          <span class="muted">${d.push ? 'sends its own reports' : esc((d.user ? d.user + '@' : '') + (d.host || ''))} · ${d.drives.length} drive${d.drives.length === 1 ? '' : 's'}</span></button></li>`).join('')}</ul>
+        <div class="row"><button type="button" data-add>+ Add your own</button></div><div class="editor"></div>
         <p class="muted">You can always add more later in Settings → Devices.</p>`;
       const editor = fresh.querySelector('.editor');
+      bindDiscover(fresh, W.cfg.devices, (added) => {
+        if (added.length) draw().then(() => box.querySelector(`[data-open="${W.cfg.devices.indexOf(added[0])}"]`)?.click());
+      });
       const open = (i) => {
         const dev = W.cfg.devices[i];
         editor.innerHTML = deviceForm(dev, payload);

@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     ports:
       - "7171:7171"
+    # "Find devices on my network" only sees Docker's own network unless the
+    # hub shares the host's: use this instead of ports to turn it on
+    # network_mode: host
     volumes:
       # scans, history and the hub's own ssh key
       - ./data:/data

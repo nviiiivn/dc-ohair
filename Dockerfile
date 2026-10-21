@@ -2,13 +2,13 @@
 FROM python:3.12-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssh-client sshpass \
+ && apt-get install -y --no-install-recommends openssh-client sshpass ieee-data \
  && apt-get clean && find /var/lib/apt/lists -type f -delete
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY agent.py collect.py hub.py demo.py push.py ./
+COPY agent.py collect.py hub.py demo.py push.py discover.py ./
 COPY web ./web
 
 # the hub runs as an ordinary user; /data holds scans, history and the hub's ssh key

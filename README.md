@@ -111,6 +111,10 @@ The hub finds the drives on the machine it runs on. It hides system and pseudo f
 
 Add each computer or box you want in the city. For each one, give it a name, a host (an IP address or a name like `nas.local`) and a user.
 
+Press **Find devices on my network** to have the hub knock on the SSH and file-sharing ports of the machines around it (only when you ask, and only on your own private network). You get a yes/no checklist with names, open ports and a guess at what each one is; tick the ones to add, or press **+ Add your own** for anything it missed.
+
+<p align="center"><img src="docs/media/discover.png" width="760" alt="Find devices on my network: a checklist of what answered"></p>
+
 Then let the hub in. The hub has **its own SSH key**, and the wizard shows two ways to add it to the device:
 
 1. **Easiest:** run the `ssh-copy-id` line it shows you **on the hub**. It asks for the device's password once.
@@ -308,7 +312,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **Find devices on my network.** An opt-in LAN check for SSH and SMB. You get a yes/no checklist of what it found, plus "+ Add your own".
 - **Search.** Find any file or folder on any device and fly to it.
 - **List view.** A fast, plain, sortable list of the biggest files and folders, one click away from any 3D view.
 - **Drive health.** Pair with an existing [Scrutiny](https://github.com/AnalogJ/scrutiny), or read SMART data with `smartctl`. It's hidden by default behind a *Health* toggle, and the only always-on hint is a small dot on a drive that's actually failing (which can be turned off too).

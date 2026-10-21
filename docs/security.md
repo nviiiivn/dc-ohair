@@ -171,6 +171,10 @@ The proxy then reaches the container from the Docker bridge, so add that address
 
 ---
 
+## Finding devices
+
+**Find devices on my network** runs only when someone presses it. It tries a TCP connection to ports 22, 445, 548, 5000 and 5001 on each address of the hub's own network (or a private network you type in, at most a /22), reads the SSH greeting line if there is one, and asks for names over reverse DNS and multicast DNS. It never logs in and never sends anything else. It refuses public address ranges, and the hub limits it to a few searches a minute.
+
 ## What the hub does to protect itself
 
 - **Writes need a custom header.** Every `POST` and `PUT` must send `X-DC: 1`. A web page on another site can't add that header without CORS permission, and the hub never grants any, so other sites can't make your browser change settings or start scans.
