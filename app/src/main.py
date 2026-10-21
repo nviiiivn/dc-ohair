@@ -47,6 +47,7 @@ class App:
         self.shown = PAGE_ROWS
         self.highlight = None
         self.body = ft.Container(expand=True)
+        self.citysrv = None  # serves the 3D page from inside the app when there's no hub
 
     # ---------- start, connect, log in ----------
 
@@ -632,22 +633,28 @@ class App:
 
     def city_view(self):
         t = self.t
-        if isinstance(self.hub, Hub):
-            try:
-                import flet_webview as fwv
-                return ft.Column([fwv.WebView(url=self.hub.url, expand=True, bgcolor=t['bg'])], expand=True)
-            except ImportError:
-                pass
+        try:
+            import flet_webview as fwv
+        except ImportError:
+            fwv = None
+        if fwv and isinstance(self.hub, Hub):
+            return ft.Column([fwv.WebView(url=self.hub.url, expand=True, bgcolor=t['bg'])], expand=True)
+        if fwv:
+            # no hub: the same page, served by the app itself from what's already loaded
+            if self.citysrv is None:
+                import cityserver
+                self.citysrv = cityserver.CityServer(lambda: self.city, lambda: getattr(self.hub, 'data', {}).get('history', {}))
+            self.citysrv.set_theme(self.theme)
+            return ft.Column([fwv.WebView(url=self.citysrv.url, expand=True, bgcolor=t['bg'])], expand=True)
+
         async def open_web(e):
             await ft.UrlLauncher().launch_url(self.hub.url)
         body = [ft.Icon(ft.Icons.LOCATION_CITY, size=64, color=t['accent']),
-                ft.Text('The 3D city lives on your hub\'s web page.', size=16, text_align=ft.TextAlign.CENTER),
+                ft.Text('The 3D city needs the app\'s WebView, which this build doesn\'t have.', size=16, text_align=ft.TextAlign.CENTER),
                 ft.TextButton('See the map instead', icon=ft.Icons.GRID_VIEW,
                               on_click=lambda e: (setattr(self, 'mode', 'map'), self.go_tab(1)))]
         if isinstance(self.hub, Hub):
             body.append(ft.FilledButton('Open it in the browser', icon=ft.Icons.OPEN_IN_BROWSER, on_click=open_web))
-        else:
-            body.insert(2, ft.Text('Connect to a hub to fly through it here.', color=t['text2'], text_align=ft.TextAlign.CENTER))
         return ft.Container(ft.Column(body, horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True, spacing=12),
                             alignment=ft.Alignment.CENTER, expand=True, padding=24)
 

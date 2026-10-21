@@ -10,6 +10,8 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { api as request, openSettings, openWizard, showLogin } from './settings.js';
 
 const CAT_NAMES = ['Music', 'Games', 'Series', 'Movies', 'Other'];
+// ?app: the phone app's built-in copy with no hub behind it, so no hub settings
+const IN_APP = new URLSearchParams(location.search).has('app');
 const THEMES = ['dark', 'light', 'sepia', 'cyberpunk', 'matrix', 'ocean'];
 const VIEWS = ['city', 'circle', 'epcot'];
 const W = 1000;             // City: the current root always fills a W x W square
@@ -1517,7 +1519,7 @@ async function load() {
 
 async function start() {
   me = await request('/api/me');
-  $('#gear').hidden = false;
+  $('#gear').hidden = IN_APP;
   if (me.auth !== 'off' && !me.admin) { $('#msg').textContent = 'Log in to see your drives.'; return showLogin(me); }
   await load();
   if (me.setup || location.hash === '#setup') openWizard(me);

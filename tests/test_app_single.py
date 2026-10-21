@@ -1,10 +1,11 @@
-"""Tests for the phone app's single-device mode (app/src/single.py)."""
-import os, shutil, subprocess, sys, tempfile, unittest
+"""Tests for the phone app's single-device mode (app/src/single.py) and its built-in City page (cityserver.py)."""
+import json, os, shutil, subprocess, sys, tempfile, unittest, urllib.error, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'app', 'src'))
 subprocess.run([sys.executable, os.path.join(ROOT, 'app', 'sync.py')], check=True, stdout=subprocess.DEVNULL)
 
+import cityserver  # noqa: E402
 import model  # noqa: E402
 import single  # noqa: E402
 
@@ -84,6 +85,40 @@ class SingleTest(unittest.TestCase):
             s.scan_now()
         self.assertIsNone(s.password)
         self.assertFalse(s.running)
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args):
+        return None
+
+
+class CityServerTest(unittest.TestCase):
+    def setUp(self):
+        self.srv = cityserver.CityServer(lambda: {'devices': [], 'node': object()})
+        self.addCleanup(self.srv.httpd.shutdown)
+        self.base = self.srv.url.split('/?')[0]
+        self.opener = urllib.request.build_opener(NoRedirect)
+
+    def get(self, path, cookie=None):
+        req = urllib.request.Request(self.base + path, headers={'Cookie': cookie} if cookie else {})
+        try:
+            with self.opener.open(req, timeout=5) as res:
+                return res.status, res.headers, res.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+
+    def test_only_the_apps_webview_gets_in(self):
+        self.assertEqual(self.get('/api/city')[0], 403)
+        self.assertEqual(self.get('/?key=wrong')[0], 403)
+        code, headers, _ = self.get(self.srv.url[len(self.base):])
+        self.assertEqual(code, 303)
+        cookie = headers['Set-Cookie'].split(';')[0]
+        self.assertIn('HttpOnly', headers['Set-Cookie'])
+        code, _, body = self.get('/api/city', cookie)
+        self.assertEqual(json.loads(body), {'devices': [], 'node': None})
+        self.assertEqual(self.get('/', cookie)[0], 200)
+        self.assertEqual(self.get('/../../hub.py', cookie)[0], 404)
+        self.assertEqual(self.get('/api/settings', cookie)[0], 404)
 
 
 if __name__ == '__main__':

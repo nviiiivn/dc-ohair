@@ -28,3 +28,12 @@ module = "main"
 # "Scan this phone" measures every file, so it asks for All files access (sideloaded builds)
 "android.permission.READ_EXTERNAL_STORAGE" = true
 "android.permission.MANAGE_EXTERNAL_STORAGE" = true
+
+# hubs usually answer on plain http on the home network, and with no hub the
+# City tab is served by the app itself on 127.0.0.1
+[tool.flet.android.manifest_application]
+usesCleartextTraffic = "true"
+
+[tool.flet.ios.info]
+NSAppTransportSecurity = { NSAllowsLocalNetworking = true }
+NSLocalNetworkUsageDescription = "D.C. O'HAIR talks to your hub and computers on your home network."

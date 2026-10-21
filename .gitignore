@@ -22,3 +22,4 @@ app/.venv/
 app/build/
 app/src/shared/demo.py
 app/src/shared/agent.py
+app/src/web/
