@@ -36,8 +36,8 @@ Nothing gets installed on the devices. The hub sends a small script each time it
 ## Option A: Docker
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 mkdir -p config data   # your settings and your scans live here
 docker compose up -d
 ```
@@ -70,8 +70,8 @@ docker compose exec dc-ohair ssh-copy-id -i /data/ssh/id_ed25519.pub admin@nas.l
 Download the installer, **read it**, then run it:
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 less install.sh
 ./install.sh
 ```
@@ -92,8 +92,8 @@ Please don't run any installer by piping it from the internet straight into a sh
 ## Option C: By hand
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python hub.py
@@ -258,7 +258,7 @@ If only the proxy should reach the hub, set `hub.bind: 127.0.0.1`.
 ## Updating
 
 ```sh
-cd dc-ohair
+cd diskcity
 git pull
 sudo systemctl restart dc-ohair        # or: docker compose up -d --build
 ```

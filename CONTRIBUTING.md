@@ -5,8 +5,8 @@ Thanks for helping. Bug reports, ideas and pull requests are all welcome.
 ## Run it locally
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python hub.py --demo

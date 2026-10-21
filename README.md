@@ -43,8 +43,8 @@ Pick one of the two ways below. Either way, you then open **http://your-hub:7171
 ### Docker
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 mkdir -p config data   # your settings and your scans live here
 docker compose up -d
 ```
@@ -58,8 +58,8 @@ The compose file mounts the host's filesystem **read-only** at `/hostfs`, so the
 Download the installer, **read it**, then run it:
 
 ```sh
-git clone https://github.com/nviiiivn/dc-ohair.git
-cd dc-ohair
+git clone https://github.com/nviiiivn/diskcity.git
+cd diskcity
 less install.sh        # read it first; it's short
 ./install.sh
 ```

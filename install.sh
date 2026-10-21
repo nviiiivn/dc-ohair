@@ -15,7 +15,7 @@
 #   bash install.sh --yes      # take every default, no questions
 set -euo pipefail
 
-REPO_URL="${DC_REPO:-https://github.com/nviiiivn/dc-ohair.git}"
+REPO_URL="${DC_REPO:-https://github.com/nviiiivn/diskcity.git}"
 YES=0
 [[ "${1:-}" == "--yes" ]] && YES=1
 
