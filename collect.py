@@ -171,6 +171,18 @@ FIXES = [
 ]
 
 
+def identity_args():
+    """The user's usual keys, then the hub's own. Naming any key with -i makes ssh
+    skip its default ones, so those have to be listed too."""
+    keys = [os.path.expanduser('~/.ssh/' + k) for k in ('id_ed25519', 'id_ecdsa', 'id_rsa', 'id_ed25519_sk', 'id_ecdsa_sk')]
+    keys.append(os.path.join(SSH_DIR, 'id_ed25519'))
+    args = []
+    for k in keys:
+        if os.path.exists(k):
+            args += ['-i', k]
+    return args
+
+
 def explain(stderr, dev):
     text = stderr.strip()
     host = dev.get('host') or ssh_target(dev).split('@')[-1]
@@ -196,8 +208,7 @@ def run_agent(dev, spec, timeout):
         cmd, stdin = [sys.executable, AGENT, arg], subprocess.DEVNULL
     else:
         cmd = ['ssh', '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ServerAliveInterval=30']
-        if os.path.exists(os.path.join(SSH_DIR, 'id_ed25519')):
-            cmd += ['-i', os.path.join(SSH_DIR, 'id_ed25519')]
+        cmd += identity_args()
         if dev.get('port'):
             cmd += ['-p', str(dev['port'])]
         # base64 keeps the argument safe in fish as well as sh; command_prefix wraps

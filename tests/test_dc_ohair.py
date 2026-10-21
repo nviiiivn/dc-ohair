@@ -112,6 +112,24 @@ class ConfigTest(unittest.TestCase):
             collect.load_config(self.write('devices:\n  - {id: a, drives: [{name: R, path: /}]}\n'))
 
 
+class KeyTest(unittest.TestCase):
+    def test_default_keys_are_kept_next_to_the_hub_key(self):
+        home = tempfile.mkdtemp()
+        os.makedirs(os.path.join(home, '.ssh'))
+        open(os.path.join(home, '.ssh', 'id_ed25519'), 'w').close()
+        old_home, old_dir = os.environ.get('HOME'), collect.SSH_DIR
+        os.environ['HOME'] = home
+        collect.SSH_DIR = os.path.join(home, 'hub')
+        os.makedirs(collect.SSH_DIR)
+        open(os.path.join(collect.SSH_DIR, 'id_ed25519'), 'w').close()
+        try:
+            args = collect.identity_args()
+        finally:
+            os.environ['HOME'] = old_home
+            collect.SSH_DIR = old_dir
+        self.assertEqual(args, ['-i', os.path.join(home, '.ssh', 'id_ed25519'), '-i', os.path.join(home, 'hub', 'id_ed25519')])
+
+
 class HubTest(unittest.TestCase):
     def test_clock_times_reads_yaml_sexagesimal(self):
         self.assertEqual(hub.clock_times(['04:30', 270, '23:05']), [(4, 30), (4, 30), (23, 5)])
