@@ -1,0 +1,2 @@
+# what the app needs on the phone; flet build bundles these
+flet==1.0.4

@@ -24,4 +24,5 @@ jobs:
       - name: check the browser code parses
         run: |
           for f in web/app.js web/settings.js; do cp "$f" "/tmp/$(basename "$f" .js).mjs"; node --check "/tmp/$(basename "$f" .js).mjs"; done
+      - run: python -m py_compile app/src/main.py app/src/model.py app/src/hubclient.py app/src/themes.py
       - run: bash -n install.sh

@@ -1,0 +1,27 @@
+# The D.C. O'HAIR phone and tablet app, built with Flet.
+#   python sync.py            # copy the hub's shared Python into src/shared
+#   flet run src/main.py      # try it on this computer
+#   flet build apk            # Android (see README.md for iOS)
+#
+# No [project.dependencies] on purpose: flet build falls back to
+# requirements.txt, which is the list kept current.
+
+[project]
+name = "dc-ohair"
+version = "0.1.0"
+description = "Your D.C. O'HAIR disk city, on your phone"
+requires-python = ">=3.10"
+
+[tool.flet]
+product = "D.C. O'HAIR"
+org = "io.github.nviiiivn"
+bundle_id = "io.github.nviiiivn.dcohair"
+company = "D.C. O'HAIR contributors"
+copyright = "Copyright 2026 the D.C. O'HAIR contributors"
+
+[tool.flet.app]
+path = "src"
+module = "main"
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true

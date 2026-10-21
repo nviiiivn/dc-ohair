@@ -16,3 +16,9 @@ node_modules/
 .playwright-mcp/
 *.tmp
 .DS_Store
+
+# the app
+app/.venv/
+app/build/
+app/src/shared/demo.py
+app/src/shared/agent.py
