@@ -1,0 +1,20 @@
+# Bare-metal unit. install.sh fills in the paths and user; see docs/setup.md.
+[Unit]
+Description=D.C. O'HAIR hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@APP@
+Environment=DC_DATA=@DATA@ DC_CONFIG=@CONFIG@ PYTHONUNBUFFERED=1
+ExecStart=@APP@/.venv/bin/python @APP@/hub.py
+Restart=on-failure
+RestartSec=5
+# the hub only reads drives; keep the rest of the system out of its reach
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

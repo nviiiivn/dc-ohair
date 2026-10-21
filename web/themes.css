@@ -1,0 +1,46 @@
+/* The six built-in themes. --cat-0..4 are the building colors (Music, Games, Series, Movies, Other),
+   one palette per theme, each checked for color-blind separation against that
+   theme's background. --free and --unseen color the free-space lots and the
+   space a scan couldn't see. */
+:root, [data-theme="dark"] {
+  --bg: #0a0014; --bg2: #120025; --surface: #1a0033; --border: #3a1a5a; --text: #d4c8ff; --text2: #9a8abb;
+  --accent: #ffcc00; --green: #00ff88; --red: #ff4466; --ch-bg: #150028; --ch-hover: #250048;
+  --cat-0: #f83b8c; --cat-1: #5df730; --cat-2: #2bd1fe; --cat-3: #d9a02c; --cat-4: #8760eb;
+  --free: #1d3b34; --unseen: #4a4560;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #eef5f8; --bg2: #eef5f8; --surface: #f5eedc; --border: #f00; --text: #2a2218; --text2: #6a5a48;
+  --accent: #f00; --green: #6767a3; --red: #bb4422; --ch-bg: #fffaf0; --ch-hover: #f5eedc;
+  --cat-0: #89221c; --cat-1: #019f68; --cat-2: #204fb5; --cat-3: #da6600; --cat-4: #af6af2;
+  --free: #cfe3dc; --unseen: #a9a39a;
+  color-scheme: light;
+}
+[data-theme="sepia"] {
+  --bg: #fdf6e3; --bg2: #f5e6c8; --surface: #efe0b8; --border: #d8c8a0; --text: #433422; --text2: #7a6a5a;
+  --accent: #b58900; --green: #589500; --red: #cb4b16; --ch-bg: #fff8ee; --ch-hover: #f0e6d0;
+  --cat-0: #e22cc9; --cat-1: #16a21c; --cat-2: #3480fc; --cat-3: #a82700; --cat-4: #692e9b;
+  --free: #dfe6c4; --unseen: #b5a88f;
+  color-scheme: light;
+}
+[data-theme="cyberpunk"] {
+  --bg: #0a0020; --bg2: #120030; --surface: #1a0045; --border: #6633cc; --text: #e0d0ff; --text2: #8877bb;
+  --accent: #ff00ff; --green: #00ffaa; --red: #ff0055; --ch-bg: #150035; --ch-hover: #250055;
+  --cat-0: #e70ca9; --cat-1: #399d57; --cat-2: #39f2ff; --cat-3: #fdc010; --cat-4: #4475f6;
+  --free: #1b2f4a; --unseen: #4a3f6b;
+  color-scheme: dark;
+}
+[data-theme="matrix"] {
+  --bg: #000; --bg2: #001100; --surface: #002200; --border: #003300; --text: #00ff00; --text2: #006600;
+  --accent: #00ff00; --green: #00ff00; --red: #ff0033; --ch-bg: #001a00; --ch-hover: #002a00;
+  --cat-0: #f9058e; --cat-1: #33ae29; --cat-2: #0bddf3; --cat-3: #f5cc58; --cat-4: #9850f2;
+  --free: #0a2a0a; --unseen: #2a3a2a;
+  color-scheme: dark;
+}
+[data-theme="ocean"] {
+  --bg: #0a1628; --bg2: #0f1f3a; --surface: #152a4a; --border: #1e3a5f; --text: #b0d0ff; --text2: #6080b0;
+  --accent: #4fc3ff; --green: #4caf88; --red: #ff5252; --ch-bg: #0f1f3a; --ch-hover: #1a3050;
+  --cat-0: #f12651; --cat-1: #2afa51; --cat-2: #31c8fc; --cat-3: #d3a329; --cat-4: #b93ef3;
+  --free: #12384a; --unseen: #3b4d6b;
+  color-scheme: dark;
+}

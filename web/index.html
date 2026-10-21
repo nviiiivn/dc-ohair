@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>D.C. O'HAIR</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/themes.css?v=0.2.3">
+<link rel="stylesheet" href="/style.css?v=0.2.3">
+<script src="/theme-config.js"></script>
+<script src="/theme-boot.js?v=0.2.3"></script>
+<script type="importmap">
+{"imports": {"three": "/vendor/three/three.module.min.js", "three/addons/": "/vendor/three/"}}
+</script>
+</head>
+<body>
+<main id="app">
+  <section id="stage">
+    <canvas id="city" aria-label="3D city of your drives"></canvas>
+    <div id="labels"></div>
+    <div id="top">
+      <div id="where">
+        <button id="back" type="button" hidden>← Back</button>
+        <nav id="crumbs" aria-label="Where you are"></nav>
+      </div>
+      <div id="controls">
+        <div class="seg" id="views" role="group" aria-label="View">
+          <button type="button" data-view="city">City</button>
+          <button type="button" data-view="circle">Circle</button>
+          <button type="button" data-view="epcot">EPCOT</button>
+        </div>
+        <label class="pick">Sort
+          <select id="sort">
+            <option value="type">Type</option>
+            <option value="size">Size</option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="showFree"> Free space</label>
+        <div class="swatches" id="themes" role="group" aria-label="Theme"></div>
+        <button type="button" id="gear" class="float" title="Settings" aria-label="Settings" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+    </div>
+    <p id="hint">Tap or click a block to go inside</p>
+    <div id="legend"></div>
+    <aside id="card" aria-live="polite"></aside>
+    <div id="tip" hidden></div>
+    <div id="msg">Hold on to your butts…</div>
+    <button id="paneToggle" type="button" aria-controls="panel" aria-expanded="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="sr">Hide the drive table</span>
+    </button>
+  </section>
+  <aside id="panel">
+    <div class="inner">
+      <header>
+        <img src="/logo.svg" alt="" width="40" height="40">
+        <div>
+          <h1>D.C. O'HAIR</h1>
+          <p class="tag">Data City Over Here Am I Right?</p>
+        </div>
+      </header>
+      <div class="scanbar">
+        <span id="updated"></span>
+        <button id="scanNow" type="button" hidden>Scan now</button>
+      </div>
+      <div class="tablewrap">
+        <table id="drives">
+          <thead><tr>
+            <th class="name">Drive</th><th>Used</th><th>Free</th><th>Total</th>
+            <th data-cat="0"><i class="dot" style="background:var(--cat-0)"></i>Music</th>
+            <th data-cat="1"><i class="dot" style="background:var(--cat-1)"></i>Games</th>
+            <th data-cat="2"><i class="dot" style="background:var(--cat-2)"></i>Series</th>
+            <th data-cat="3"><i class="dot" style="background:var(--cat-3)"></i>Movies</th>
+            <th data-cat="4"><i class="dot" style="background:var(--cat-4)"></i>Other</th>
+          </tr></thead>
+          <tbody></tbody>
+          <tfoot></tfoot>
+        </table>
+      </div>
+    </div>
+  </aside>
+</main>
+<script type="module" src="/app.js?v=0.2.3"></script>
+</body>
+</html>

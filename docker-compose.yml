@@ -1,0 +1,18 @@
+# D.C. O'HAIR: docker compose up -d, then open http://<this machine>:7171
+services:
+  dc-ohair:
+    build: .
+    image: dc-ohair:latest
+    container_name: dc-ohair
+    restart: unless-stopped
+    ports:
+      - "7171:7171"
+    volumes:
+      # scans, history and the hub's own ssh key
+      - ./data:/data
+      # your config; the setup wizard writes it, so the folder must be writable
+      - ./config:/config
+      # this machine's drives, read-only, so the hub can scan the box it runs on
+      - /:/hostfs:ro,rslave
+      # optional: let the hub use your existing ssh keys too (read-only)
+      # - ~/.ssh:/home/dc/.ssh:ro

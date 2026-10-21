@@ -1,0 +1,64 @@
+# D.C. O'HAIR config example. Copy to devices.yml (which git ignores) and edit,
+# or skip this file entirely: with no config the web page runs a setup wizard.
+# Every option is explained in docs/configuration.md.
+
+hub:
+  port: 7171
+  bind: 0.0.0.0              # 127.0.0.1 to only allow a reverse proxy on this machine
+  auth: password             # "password" (log in on the page) or "proxy" (your reverse proxy does auth; needs bind 127.0.0.1)
+  schedule: ["04:30"]        # daily scan times, 24-hour clock, in the hub's timezone. Quote them.
+  alert_percent: 90          # drives this full or fuller get flagged
+  alert_webhook: ""          # optional URL that gets a POST when a drive crosses alert_percent (ntfy works)
+  history_days: 400          # how long to keep used/free history for the growth sparklines
+  ui:
+    view: city               # default view for new visitors: city, circle or epcot
+    units: binary            # binary (G = 1024³ bytes) or decimal (GB = 1000³ bytes)
+  theme:
+    default: dark            # dark, light, sepia, cyberpunk, matrix or ocean
+    cookie: dc-theme         # cookie that remembers the pick; share one across your sites to keep them in step
+    domain: ""               # e.g. .example.com to share that cookie with your other subdomains
+    storage: dc-theme        # localStorage fallback key
+
+scan:
+  min_size: 50M              # files and folders at least this big become their own buildings
+  depth: 12                  # how many folder levels deep to keep
+  timeout_hours: 4
+  categories: {}             # leave empty for the defaults; see docs/configuration.md to change them
+
+devices:
+  # the machine the hub runs on
+  - id: hub
+    name: Home server
+    local: true
+    drives:
+      - name: System
+        path: /
+        exclude: ["/var/lib/docker", "*/node_modules", "*/.cache"]
+
+  # a NAS reached over ssh with the hub's key (Settings → Devices shows the line to add)
+  - id: nas
+    name: Media NAS
+    note: Kodi box
+    ssh: admin@192.0.2.10
+    drives:
+      - {name: Movies, path: /mnt/movies, mounted: true}
+      - {name: Shows, path: /mnt/shows, mounted: true}
+
+  # a laptop that sleeps: caffeinate keeps a Mac awake while it's scanned
+  - id: macbook
+    name: MacBook
+    ssh: me@192.0.2.20
+    command_prefix: caffeinate -i
+    drives:
+      - {name: Data, path: /System/Volumes/Data}
+
+  # a device that only takes passwords: password_cmd prints the password at scan time
+  # (from a password manager, say). The password itself is never stored.
+  - id: desktop
+    name: Desktop
+    host: 192.0.2.30
+    user: me
+    port: 22
+    password_cmd: ["pass", "show", "desktop/ssh"]
+    drives:
+      - {name: Home, path: /home, exclude: ["*/.local/share/Steam/steamapps/shadercache"]}

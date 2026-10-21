@@ -1,0 +1,9 @@
+.git
+data
+devices.yml
+devices.yml.bak
+.scrub-blocklist
+docs/media
+tests
+__pycache__
+.venv
