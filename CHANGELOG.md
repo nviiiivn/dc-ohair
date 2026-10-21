@@ -5,11 +5,16 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- Search with fly-to.
 - Drive health (Scrutiny pairing or built-in smartctl), hidden by default.
 - Notifications: ntfy, Discord and email.
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.4.0] - search and the list view
+
+### Added
+- **Search** across every drive on every device by name, from the toolbar or with **/**. Picking a result opens the folder it's in and flies the camera to it.
+- **List view**: a plain table of what's in the current folder, or the biggest files anywhere below it, sortable by name, size or date, and following the category filter.
 
 ## [0.3.0] - find devices on my network
 

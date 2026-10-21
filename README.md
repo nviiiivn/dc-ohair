@@ -172,10 +172,23 @@ Big drives take a few minutes. After that, the hub rescans every day at 04:30, o
 | Fly | W A S D, Q/E for down/up, Shift for faster | (none) |
 | Go inside | click a block | tap a block |
 | Go back up | Esc, Backspace, or **Back** | **Back** |
+| Search | **/**, then type; arrows and Enter pick a result | tap the search box |
 
 Hover over anything (with a mouse) to see its name, path, size, categories, number of files and newest change. On a tablet, tap a file to see the same details in the info card. The card can be shrunk to a single line with **–**.
 
 Every file of 50 MB or more gets its own building, so a folder of a thousand movies is a thousand buildings. When a folder has more than 120 items, they're grouped into blocks so you can find your way: by first letter, by year, or by size band, depending on the sort.
+
+### Search
+
+Type in the **Find a file or folder** box (or press **/**) to search every drive on every device by name. Pick a result and the city takes you to the folder it's in and flies the camera to it, with its details in the info card.
+
+<p align="center"><img src="docs/media/search.gif" width="900" alt="Searching for a name and flying to it"></p>
+
+### List view
+
+Press **List** for a plain, fast table instead of the 3D view: either what's in the current folder, or the **biggest files** anywhere below it, with sizes, bars, file counts and dates. Sort by name, size or newest; tap a folder to go into it, or a file to fly to it in the city. It follows the category filter, so "only Movies" plus "Biggest files" answers "which films are eating my space?".
+
+<p align="center"><img src="docs/media/list.png" width="760" alt="The list view: biggest files below here"></p>
 
 ### Sort
 
@@ -312,8 +325,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **Search.** Find any file or folder on any device and fly to it.
-- **List view.** A fast, plain, sortable list of the biggest files and folders, one click away from any 3D view.
 - **Drive health.** Pair with an existing [Scrutiny](https://github.com/AnalogJ/scrutiny), or read SMART data with `smartctl`. It's hidden by default behind a *Health* toggle, and the only always-on hint is a small dot on a drive that's actually failing (which can be turned off too).
 - **Notifications.** ntfy, Discord and email for alerts.
 - **More login options.** OIDC, and a helper that writes a VoidAuth + Caddy setup for you.

@@ -208,6 +208,13 @@ function kidsFor(node) {
 
 const parentOf = (n) => n.shownIn || n.p;
 
+// the real folders a node lives in (no sort/group blocks), for lists
+function realPath(node) {
+  const names = [];
+  for (let n = node.p; n && n.kind !== 'all'; n = n.p) names.unshift(n.n);
+  return names.join(' › ');
+}
+
 function pathOf(node) {
   const names = [];
   for (let n = parentOf(node); n && n.kind !== 'all'; n = parentOf(n)) names.unshift(n.n);
@@ -903,6 +910,7 @@ function goUp(to) {
 }
 
 function crumbs() {
+  if (listOn) showList();
   const chain = [];
   for (let n = root; n; n = parentOf(n)) chain.unshift(n);
   const nav = $('#crumbs');
@@ -1076,6 +1084,164 @@ tbody.addEventListener('mouseover', (e) => {
 });
 tbody.addEventListener('mouseleave', () => setHover(null));
 
+// ---------- search ----------
+// every folder and file in every drive, searchable by name; the easter egg
+// for "door locks" flies to the biggest file in the whole city
+
+let index = [];
+function buildIndex() {
+  index = [];
+  const walk = (n, trail) => {
+    for (const k of n.k) {
+      if (k.kind === 'rest' || k.kind === 'unseen') continue;
+      index.push({ node: k, key: k.n.toLowerCase(), trail });
+      if (k.k.length) walk(k, trail ? trail + ' › ' + k.n : k.n);
+    }
+  };
+  if (all) walk(all, '');
+}
+
+function biggestFile() {
+  let best = null;
+  for (const it of index) if (it.node.kind === 'file' && (!best || it.node.s > best.node.s)) best = it;
+  return best;
+}
+
+function search(q) {
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  if (/\bdoor ?locks?\b/.test(q)) {
+    const big = biggestFile();
+    return big ? [Object.assign({ egg: true }, big)] : [];
+  }
+  const words = q.split(/\s+/);
+  const hits = [];
+  for (const it of index) {
+    if (!words.every((w) => it.key.includes(w))) continue;
+    hits.push([it.key === q ? 0 : it.key.startsWith(words[0]) ? 1 : 2, it]);
+  }
+  hits.sort((a, b) => a[0] - b[0] || b[1].node.s - a[1].node.s);
+  return hits.slice(0, 40).map((h) => h[1]);
+}
+
+// show the node inside its own folder, then fly the camera to it
+function goTo(node) {
+  if (!allOn() && !eff(node)) setCats([true, true, true, true, true]);
+  const parent = node.p || all;
+  root = parent;
+  rebuild();
+  crumbs();
+  const b = layout.bounds.get(node);
+  selected = node;
+  showCard();
+  if (!b) return flyTo(overview().pos, overview().target, 700);
+  const ov = overview();
+  camera.position.copy(ov.pos).multiplyScalar(0.6);
+  controls.target.copy(ov.target);
+  const [pos, tgt] = closeUp(b);
+  flyTo(pos, tgt, 1100, () => setHover(node));
+}
+
+const findBox = $('#find');
+const results = $('#results');
+let found = [];
+let active = 0;
+
+function showResults() {
+  results.hidden = !found.length && !findBox.value.trim();
+  if (results.hidden) return;
+  if (!found.length) { results.innerHTML = '<li class="none">Nothing by that name.</li>'; return; }
+  results.innerHTML = found.map((it, i) => {
+    const n = it.node;
+    const dot = n.kind === 'file' || n.kind === 'dir' ? `<i class="dot" style="background:var(--cat-${Math.min(dominant(n), 4)})"></i>` : '<i class="dot" style="background:var(--text2)"></i>';
+    const name = it.egg ? 'the file that resets the door locks' : esc(n.n);
+    return `<li role="option" data-i="${i}" aria-selected="${i === active}">${dot}<span class="nm">${name}<small>${esc(it.egg ? n.n : it.trail || (n.kind === 'device' ? 'device' : ''))}</small></span><b>${fmt(n.s)}</b></li>`;
+  }).join('');
+}
+
+let findTimer = null;
+findBox.addEventListener('input', () => {
+  clearTimeout(findTimer);
+  findTimer = setTimeout(() => { found = search(findBox.value); active = 0; showResults(); }, 120);
+});
+findBox.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    active = Math.max(0, Math.min(found.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)));
+    showResults();
+    results.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && found[active]) {
+    pickResult(active);
+  } else if (e.key === 'Escape') {
+    findBox.value = ''; found = []; showResults(); findBox.blur();
+  }
+});
+results.addEventListener('mousedown', (e) => {
+  const li = e.target.closest('[data-i]');
+  if (li) { e.preventDefault(); pickResult(+li.dataset.i); }
+});
+findBox.addEventListener('blur', () => setTimeout(() => { results.hidden = true; }, 150));
+findBox.addEventListener('focus', showResults);
+function pickResult(i) {
+  const it = found[i];
+  results.hidden = true;
+  findBox.blur();
+  if (listOn) { listOn = false; showList(); }
+  goTo(it.node);
+}
+addEventListener('keydown', (e) => {
+  if (e.key === '/' && !(e.target.closest && e.target.closest('input, textarea, select'))) { e.preventDefault(); findBox.focus(); }
+});
+
+// ---------- list view: the plain, fast way to see what's eating space ----------
+
+let listOn = false;
+let listMode = 'here';
+let listSort = 'size';
+
+function filesBelow(node, limit) {
+  const out = [];
+  const walk = (n) => { for (const k of n.k) { if (k.kind === 'file') out.push(k); else if (k.k.length) walk(k); } };
+  walk(node);
+  return out.sort((a, b) => eff(b) - eff(a)).slice(0, limit);
+}
+
+function showList() {
+  const box = $('#list');
+  box.hidden = !listOn;
+  $('#listBtn').setAttribute('aria-pressed', String(listOn));
+  if (!listOn || !root) return;
+  let rows = listMode === 'here' ? root.k.filter((k) => eff(k) > 0) : filesBelow(root, 300);
+  const by = { size: (a, b) => eff(b) - eff(a), name: (a, b) => collator.compare(a.n, b.n), newest: (a, b) => (b.m || 0) - (a.m || 0) }[listSort];
+  rows = rows.slice().sort(by).slice(0, 600);
+  const total = Math.max(1, ...rows.map(eff));
+  const th = (k, label) => `<th data-sort="${k}" aria-sort="${listSort === k ? 'descending' : 'none'}">${label}</th>`;
+  box.innerHTML = `<header><div class="seg float" role="group" aria-label="List">
+      <button type="button" data-mode="here" aria-pressed="${listMode === 'here'}">In ${esc(root.n)}</button>
+      <button type="button" data-mode="files" aria-pressed="${listMode === 'files'}">Biggest files below here</button></div>
+      <button type="button" class="x" data-close aria-label="Close the list">✕</button></header>
+    <div class="scroll"><table><thead><tr>${th('name', 'Name')}${th('size', 'Size')}<th></th><th>Files</th>${th('newest', 'Newest')}</tr></thead><tbody>
+    ${rows.map((n, i) => `<tr data-i="${i}" class="${canDrill(n) ? 'dir' : ''}"><td class="name"><i class="dot" style="background:${n.kind === 'unseen' ? 'var(--unseen)' : `var(--cat-${Math.min(dominant(n), 4)})`}"></i>${esc(n.n)}${listMode === 'files' ? `<small>${esc(realPath(n))}</small>` : ''}</td>
+      <td>${fmt(eff(n))}</td><td class="share"><span><i style="width:${(100 * eff(n)) / total}%"></i></span></td>
+      <td>${n.f ? n.f.toLocaleString() : ''}</td><td>${n.m ? new Date(n.m * 1000).toLocaleDateString() : ''}</td></tr>`).join('')}
+    </tbody></table>${rows.length ? '' : '<p class="muted">Nothing here.</p>'}</div>`;
+  box.rows = rows;
+}
+
+$('#list').addEventListener('click', (e) => {
+  const t = e.target;
+  if (t.closest('[data-close]')) { listOn = false; return showList(); }
+  const mode = t.closest('[data-mode]');
+  if (mode) { listMode = mode.dataset.mode; return showList(); }
+  const sortTh = t.closest('[data-sort]');
+  if (sortTh) { listSort = sortTh.dataset.sort; return showList(); }
+  const tr = t.closest('tr[data-i]');
+  if (!tr) return;
+  const n = $('#list').rows[tr.dataset.i];
+  if (canDrill(n)) { setRoot(n); showList(); } else { listOn = false; showList(); goTo(n); }
+});
+$('#listBtn').addEventListener('click', () => { listOn = !listOn; showList(); });
+
 // ---------- controls ----------
 
 function markView() {
@@ -1226,6 +1392,7 @@ async function load() {
     root = next;
   }
   table(api);
+  buildIndex();
   rebuild();
   crumbs();
   showCard();
