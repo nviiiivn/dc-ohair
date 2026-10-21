@@ -214,6 +214,17 @@ Hide the pane with the tab on its edge, and bring it back the same way. On a pho
 
 <p align="center"><img src="docs/media/pane.gif" width="900" alt="Hiding and showing the side pane"></p>
 
+### Drive health (optional, out of sight until you want it)
+
+Turn it on in **Settings → Health** with either source:
+
+- **My Scrutiny**: point it at an existing [Scrutiny](https://github.com/AnalogJ/scrutiny). Disks are matched to drives by WWN or serial number.
+- **Built-in SMART**: each scan also runs `smartctl -a -j` on the disk under every drive (and retries with `-d sat` for USB enclosures). It needs smartmontools and root, or a one-line sudo rule that Settings shows you.
+
+Then it stays hidden. Press **Health** in the toolbar to see it: each drive gets an **OK / Warning / Failing** line in the table (temperature, power-on hours, reallocated and pending sectors) and a green, amber or red rim in the 3D views. Each drive's info card always shows its health. The only thing that ever shows without asking is a small red dot on a drive that's actually **failing**, and you can turn that off too.
+
+<p align="center"><img src="docs/media/health.png" width="760" alt="Health turned on: OK, warning and failing drives"></p>
+
 ### Themes
 
 There are six themes: dark, light, sepia, cyberpunk, matrix and ocean. The whole scene follows the theme: sky, ground, grid, labels and the building colors. Each theme has its own five category colors, checked so they stay easy to tell apart for people with common kinds of color blindness.
@@ -232,6 +243,7 @@ Press the gear to open Settings:
 | **Devices** | Add, edit and remove devices, find their drives, test the connection, scan now. Each drive can have "leave out" patterns like `*/node_modules`. |
 | **Scanning** | Scan times, the smallest file or folder to draw, folder depth, how long to keep history, and the rules for what counts as Music, Games, Series and Movies. |
 | **Alerts** | The "almost full" line, and an optional URL to notify (an ntfy topic works as-is). |
+| **Health** | Where drive health comes from (your Scrutiny, or built-in SMART), and the failing-drive dot. |
 | **Look** | The default theme, view and units for people who haven't picked their own. |
 | **Security** | Who can open the page: anyone, an admin login, or your reverse proxy. |
 | **Backup** | Export and import the config. |
@@ -325,7 +337,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **Drive health.** Pair with an existing [Scrutiny](https://github.com/AnalogJ/scrutiny), or read SMART data with `smartctl`. It's hidden by default behind a *Health* toggle, and the only always-on hint is a small dot on a drive that's actually failing (which can be turned off too).
 - **Notifications.** ntfy, Discord and email for alerts.
 - **More login options.** OIDC, and a helper that writes a VoidAuth + Caddy setup for you.
 - **Phone apps** (iOS and Android) on the same JSON API.

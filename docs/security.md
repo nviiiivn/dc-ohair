@@ -171,6 +171,16 @@ The proxy then reaches the container from the Docker bridge, so add that address
 
 ---
 
+## Drive health and root
+
+Built-in SMART runs `smartctl`, which needs root. If the scanning user isn't root, the scanner uses `sudo -n smartctl`, so it never waits at a password prompt. Allow exactly that and nothing else with a sudoers rule (`sudo visudo -f /etc/sudoers.d/dc-ohair`):
+
+```
+scanuser ALL=(root) NOPASSWD: /usr/sbin/smartctl
+```
+
+Use the real user name and the path from `command -v smartctl`. Without the rule, health shows as *Unknown* with a note saying why, and scanning carries on as normal. Pairing with Scrutiny needs nothing on the devices: the hub reads Scrutiny's `/api/summary` (with a token from `scrutiny_token_cmd` if your Scrutiny sits behind a login).
+
 ## Finding devices
 
 **Find devices on my network** runs only when someone presses it. It tries a TCP connection to ports 22, 445, 548, 5000 and 5001 on each address of the hub's own network (or a private network you type in, at most a /22), reads the SSH greeting line if there is one, and asks for names over reverse DNS and multicast DNS. It never logs in and never sends anything else. It refuses public address ranges, and the hub limits it to a few searches a minute.

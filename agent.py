@@ -239,6 +239,101 @@ def list_mounts():
     return sorted(out, key=lambda d: d['path'])
 
 
+# ---------- drive health ----------
+
+def disk_of(root):
+    """The whole disk under a drive (Linux): its /dev name and its /dev/disk/by-id names,
+    which carry the serial number and WWN that health tools key on."""
+    if not MOUNTS:
+        return None
+    src = root_source(root)
+    if not src or not src.startswith('/dev/'):
+        return None
+    name = os.path.basename(os.path.realpath(src))
+    sysdir = os.path.realpath('/sys/class/block/' + name)
+    if os.path.exists(os.path.join(sysdir, 'partition')):
+        name = os.path.basename(os.path.dirname(sysdir))
+    ids = []
+    try:
+        for n in os.listdir('/dev/disk/by-id'):
+            if os.path.realpath('/dev/disk/by-id/' + n) == '/dev/' + name:
+                ids.append(n)
+    except OSError:
+        pass
+    return {'dev': '/dev/' + name, 'ids': sorted(ids)}
+
+
+def smartctl():
+    found = shutil.which('smartctl')
+    if found:
+        return found
+    for p in ('/usr/sbin/smartctl', '/sbin/smartctl', '/usr/local/sbin/smartctl', '/opt/homebrew/bin/smartctl'):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def summarize(d, rc):
+    attrs = {}
+    for a in (d.get('ata_smart_attributes') or {}).get('table', []):
+        attrs[a.get('id')] = (a.get('raw') or {}).get('value')
+    nv = d.get('nvme_smart_health_information_log') or {}
+    h = {'model': d.get('model_name'), 'serial': d.get('serial_number'),
+         'temp': (d.get('temperature') or {}).get('current'), 'hours': (d.get('power_on_time') or {}).get('hours'),
+         'realloc': attrs.get(5), 'pending': attrs.get(197), 'uncorrectable': attrs.get(198),
+         'media_errors': nv.get('media_errors'), 'used_pct': nv.get('percentage_used')}
+    notes = []
+    passed = (d.get('smart_status') or {}).get('passed')
+    if passed is False or rc & 8:
+        state = 'failing'
+        notes.append('SMART says the drive is failing')
+    else:
+        if rc & 16:
+            notes.append('an attribute is at its failure threshold')
+        if rc & 32:
+            notes.append('an attribute was past its threshold in the past')
+        for key, label in (('realloc', 'reallocated'), ('pending', 'pending'), ('uncorrectable', 'uncorrectable')):
+            if (h[key] or 0) > 0:
+                notes.append('%d %s sectors' % (h[key], label))
+        if (h['media_errors'] or 0) > 0:
+            notes.append('%d media errors' % h['media_errors'])
+        if (h['used_pct'] or 0) >= 90:
+            notes.append('%d%% of its rated life used' % h['used_pct'])
+        if (nv.get('critical_warning') or 0) != 0:
+            notes.append('NVMe critical warning %s' % nv['critical_warning'])
+        if (h['temp'] or 0) >= 60:
+            notes.append('running hot (%d°C)' % h['temp'])
+        state = 'warning' if notes else 'ok'
+    h.update(state=state, notes=notes, source='smart')
+    return {k: v for k, v in h.items() if v is not None}
+
+
+def smart(dev):
+    """Basic SMART health for one disk from smartctl -a -j. Needs root, or a sudo rule for smartctl."""
+    tool = smartctl()
+    if not tool:
+        return {'state': 'unknown', 'note': "smartctl isn't installed here (package smartmontools)"}
+    base = [tool] if os.geteuid() == 0 else ['sudo', '-n', tool]
+    last = ''
+    for extra in ([], ['-d', 'sat'], ['-d', 'auto']):
+        try:
+            p = subprocess.run(base + ['-a', '-j'] + extra + [dev], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+        except (OSError, subprocess.SubprocessError) as e:
+            return {'state': 'unknown', 'note': str(e)}
+        if b'password is required' in p.stderr or b'a terminal is required' in p.stderr:
+            return {'state': 'unknown', 'note': 'smartctl needs root: add a sudo rule for it (see docs/security.md)'}
+        try:
+            d = json.loads(p.stdout)
+        except ValueError:
+            last = p.stderr.decode(errors='replace').strip()[-200:]
+            continue
+        if d.get('smart_status') or d.get('nvme_smart_health_information_log') or d.get('ata_smart_attributes'):
+            return summarize(d, p.returncode)
+        msgs = (d.get('smartctl') or {}).get('messages') or []
+        last = msgs[0].get('string', '') if msgs else last
+    return {'state': 'unknown', 'note': last or 'no SMART data (USB enclosures sometimes hide it)'}
+
+
 def check(paths):
     out = {'python': sys.version.split()[0], 'host': socket.gethostname(), 'platform': sys.platform, 'paths': []}
     for p in paths:
@@ -254,7 +349,8 @@ def main():
     if spec.get('mode') == 'check':
         sys.stdout.write(json.dumps(check(spec.get('paths', []))))
         return
-    out = {'agent': 2, 'host': socket.gethostname(), 'drives': []}
+    out = {'agent': 3, 'host': socket.gethostname(), 'drives': []}
+    smart_cache = {}
     t0 = time.time()
     for d in spec.get('drives', []):
         drive = {'name': d['name'], 'path': d['path']}
@@ -275,10 +371,18 @@ def main():
         exclude = list(d.get('exclude') or []) + list(d.get('skip') or [])
         tree = scan(root, d['name'], st.st_dev, src, exclude, 0)
         drive.update(fs=fs_usage(root), tree=tree, errors=errors[0], secs=round(time.time() - t1, 1))
+        disk = disk_of(root)
+        if disk:
+            drive['disk'] = disk
+            if spec.get('health') == 'smart':
+                if disk['dev'] not in smart_cache:
+                    smart_cache[disk['dev']] = smart(disk['dev'])
+                drive['health'] = smart_cache[disk['dev']]
         out['drives'].append(drive)
     out['secs'] = round(time.time() - t0, 1)
     out['scanned'] = time.strftime('%Y-%m-%dT%H:%M:%S%z')
     sys.stdout.write(json.dumps(out, separators=(',', ':')))
 
 
-main()
+if __name__ == '__main__':
+    main()

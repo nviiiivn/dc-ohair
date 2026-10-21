@@ -124,6 +124,20 @@ def build():
         {'id': 'mac', 'name': 'MacBook', 'note': '', 'hub': False, 'drives': [
             drive('Data', '/System/Volumes/Data', g.system('Data', 140, [g.folder('Music', g.music(12))]), 256 * GiB * 0.93)]},
     ]
+    # made-up health so the Health toggle has something to show
+    health = {
+        'Media 1': {'state': 'ok', 'model': 'WDC WD40EFRX', 'temp': 36, 'hours': 31877, 'notes': [], 'source': 'smart'},
+        'Media 2': {'state': 'warning', 'model': 'ST4000VN008', 'temp': 41, 'hours': 40212, 'realloc': 8,
+                    'notes': ['8 reallocated sectors'], 'source': 'smart'},
+        'Archive': {'state': 'failing', 'model': 'WDC WD10EZEX', 'temp': 44, 'hours': 61530, 'pending': 112,
+                    'notes': ['SMART says the drive is failing'], 'source': 'smart'},
+        'System': {'state': 'ok', 'model': 'Samsung SSD 980 1TB', 'temp': 39, 'hours': 9120, 'used_pct': 4, 'notes': [], 'source': 'smart'},
+        'Windows': {'state': 'ok', 'model': 'Samsung SSD 870 EVO 2TB', 'temp': 33, 'hours': 15004, 'notes': [], 'source': 'smart'},
+    }
+    for dev in devices:
+        for d in dev['drives']:
+            if d['name'] in health and dev['id'] in ('nas', 'desktop'):
+                d['health'] = health[d['name']]
     history = {}
     now = int(time.time())
     for dev in devices:

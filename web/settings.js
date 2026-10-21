@@ -367,7 +367,7 @@ function watchScan(onTick) {
 
 // ---------- settings dialog ----------
 
-const TABS = [['devices', 'Devices'], ['scanning', 'Scanning'], ['alerts', 'Alerts'], ['look', 'Look'], ['security', 'Security'], ['backup', 'Backup']];
+const TABS = [['devices', 'Devices'], ['scanning', 'Scanning'], ['alerts', 'Alerts'], ['health', 'Health'], ['look', 'Look'], ['security', 'Security'], ['backup', 'Backup']];
 let S = null;
 
 export async function openSettings(me) {
@@ -482,6 +482,24 @@ function render(dlg) {
     html = `<div class="grid2">${field('Flag drives at or above (% full)', 'hub.alert_percent', hub.alert_percent, 'inputmode="numeric"')}</div>
       ${field('Notify this URL when a drive crosses it (optional)', 'hub.alert_webhook', hub.alert_webhook || '', 'placeholder="https://ntfy.sh/your-topic" class="mono"')}
       <p class="muted">The hub sends a short POST the first time a drive crosses the line. ntfy topics work as-is.</p>`;
+  } else if (S.tab === 'health') {
+    const hc = hub.health || {};
+    const mode = hc.mode || 'off';
+    const radio = (v, label) => `<label><input type="radio" name="hmode" value="${v}" data-k="hub.health.mode" ${mode === v ? 'checked' : ''}> ${label}</label>`;
+    html = `<p class="muted">Drive health stays out of sight until someone presses <b>Health</b> in the toolbar. The one exception is a small red dot on a drive that's actually failing.</p>
+      <fieldset class="seg3"><legend>Where health comes from</legend>${radio('off', 'Nowhere')}${radio('scrutiny', 'My Scrutiny')}${radio('smart', 'Built-in SMART')}</fieldset>
+      <div class="h-scrutiny" ${mode === 'scrutiny' ? '' : 'hidden'}>
+        ${field('Scrutiny address', 'hub.health.scrutiny_url', hc.scrutiny_url || '', 'placeholder="http://scrutiny.local:8080" class="mono"')}
+        ${field('Command that prints an API token (optional, for a Scrutiny behind a login)', 'hub.health.scrutiny_token_cmd', list(hc.scrutiny_token_cmd), 'class="mono"')}
+        <div class="row"><button type="button" data-htest>Test</button></div><p class="result" aria-live="polite"></p>
+        <p class="muted">Disks are matched to drives by WWN or serial number, which the scanner reads from /dev/disk/by-id on Linux. Rescan once after turning this on.</p>
+      </div>
+      <div class="h-smart" ${mode === 'smart' ? '' : 'hidden'}>
+        <p>Every scan also runs <span class="mono">smartctl -a -j</span> on the disk under each drive (with <span class="mono">-d sat</span> for USB enclosures). Each device needs the smartmontools package, and smartctl needs root. If the scanning user isn't root, add this rule on the device with <span class="mono">sudo visudo -f /etc/sudoers.d/dc-ohair</span> (put the user's name first, and check the path with <span class="mono">command -v smartctl</span>):</p>
+        ${copyBox('scanuser ALL=(root) NOPASSWD: /usr/sbin/smartctl')}
+        <p class="muted">That lets the user run smartctl as root, and nothing else.</p>
+      </div>
+      <label class="tick"><input type="checkbox" data-k="hub.health.failing_dot" ${hc.failing_dot === false ? '' : 'checked'}> Show a small red dot on a failing drive, even with Health off</label>`;
   } else if (S.tab === 'look') {
     const ui = hub.ui || {}, th = hub.theme || {};
     const opt = (vals, cur) => vals.map((v) => `<option ${v === cur ? 'selected' : ''}>${v}</option>`).join('');
@@ -545,12 +563,17 @@ function wire(body, dlg) {
     const t = e.target;
     if (!t.dataset.k) return;
     let v = t.value;
-    if (t.dataset.list || t.dataset.k === 'hub.schedule') v = unlist(v);
+    if (t.type === 'checkbox') v = t.checked;
+    else if (t.dataset.list || t.dataset.k === 'hub.schedule') v = unlist(v);
     else if (/percent|days|depth/.test(t.dataset.k)) v = v === '' ? '' : Number(v);
     setPath(S.cfg, t.dataset.k, v);
   });
   body.addEventListener('change', (e) => {
     if (e.target.tagName === 'SELECT') setPath(S.cfg, e.target.dataset.k, e.target.value);
+    if (e.target.name === 'hmode') {
+      body.querySelector('.h-scrutiny').hidden = e.target.value !== 'scrutiny';
+      body.querySelector('.h-smart').hidden = e.target.value !== 'smart';
+    }
     if (e.target.name === 'sec') {
       body.querySelector('.sec-pass').hidden = e.target.value !== 'password';
       body.querySelector('.sec-proxy').hidden = e.target.value !== 'proxy';
@@ -580,6 +603,16 @@ function wire(body, dlg) {
         out.className = 'result ok';
         S.me = await api('/api/me');
       } catch (err) { out.textContent = err.message; out.className = 'result err'; }
+    }
+    if (t.closest('[data-htest]')) {
+      out.textContent = 'Asking Scrutiny…';
+      out.className = 'result muted';
+      try {
+        const r = await api('/api/health/test', { health: S.cfg.hub.health || {} });
+        out.textContent = r.ok ? `Scrutiny knows ${r.disks} disk${r.disks === 1 ? '' : 's'}; ${r.matched} of your drives matched so far.` : r.error;
+        out.className = 'result ' + (r.ok ? 'ok' : 'err');
+      } catch (err) { out.textContent = err.message; out.className = 'result err'; }
+      return;
     }
     const rv = t.closest('[data-revoke]');
     if (rv) {

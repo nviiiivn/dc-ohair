@@ -62,6 +62,12 @@ function savePrefs() { try { localStorage.setItem('dc-prefs', JSON.stringify(pre
 let view = VIEWS.includes(prefs.view) ? prefs.view : 'city';
 let sortBy = ['type', 'size', 'newest', 'oldest', 'name'].includes(prefs.sort) ? prefs.sort : 'size';
 let showFree = prefs.free !== false;
+// drive health stays hidden until someone turns it on; only a failing drive gets a small dot
+let showHealth = prefs.health === true;
+const HEALTH_LABEL = { ok: 'OK', warning: 'Warning', failing: 'Failing', unknown: 'Unknown' };
+const healthOf = (n) => (n && n.kind === 'drive' && n.drive && n.drive.health) || null;
+const failing = (n) => { const h = healthOf(n); return !!h && h.state === 'failing' && !(api && api.ui && api.ui.failing_dot === false); };
+const healthColor = (h) => (h ? { ok: T.green, warning: '#f5a524', failing: T.red }[h.state] : null);
 // category filter: the legend chips switch Music/Games/Series/Movies/Other on and off everywhere
 let catsOn = Array.isArray(prefs.cats) && prefs.cats.length === 5 ? prefs.cats.map(Boolean) : [true, true, true, true, true];
 
@@ -73,7 +79,7 @@ function readTheme() {
   const v = (n) => cs.getPropertyValue(n).trim();
   T = { bg: v('--bg'), bg2: v('--bg2'), surface: v('--surface'), border: v('--border'), text: v('--text'),
     text2: v('--text2'), accent: v('--accent'), cats: [0, 1, 2, 3, 4].map((i) => v('--cat-' + i)),
-    free: v('--free'), unseen: v('--unseen') };
+    free: v('--free'), unseen: v('--unseen'), green: v('--green'), red: v('--red') };
   T.light = new THREE.Color(T.bg).getHSL({}).l > 0.5;
 }
 
@@ -253,7 +259,16 @@ function column(L, node, cx, cz, w, d, y, H, extra) {
 }
 
 function label(L, node, x, y, z, r, depth) {
-  L.labels.push({ node, x, y, z, r, depth, html: `<b>${esc(node.n)}</b><span>${fmt(eff(node))}</span>` });
+  const dot = failing(node) ? '<i class="fail" title="This drive is failing">●</i>' : '';
+  L.labels.push({ node, x, y, z, r, depth, html: `${dot}<b>${esc(node.n)}</b><span>${fmt(eff(node))}</span>` });
+}
+
+// with Health on, a drive's block sits on a glowing green, amber or red rim
+function healthRim(L, node, cx, cz, w, d, y, rot = 0) {
+  const h = showHealth && healthOf(node);
+  if (!h || !healthColor(h)) return;
+  const pad = Math.max(1, Math.min(w, d) * 0.02);
+  box(L, null, cx, cz, w + 2 * pad, d + 2 * pad, Math.max(0, y - 0.3), 0.9, healthColor(h), { mat: 'glow', rot });
 }
 
 // squarified treemap: values -> rects inside (x, z, w, d), same order as values
@@ -316,6 +331,7 @@ function placeCity(L, node, x, z, w, d, y, depth) {
     const fw = w - 2 * g, fd = d - 2 * g;
     if (eff(node) <= 0 || fw <= 0 || fd <= 0) return;
     const H = Math.min(Math.sqrt(fw * fd) * 0.85, W * 0.09);
+    healthRim(L, node, x + w / 2, z + d / 2, fw, fd, y);
     column(L, node, x + w / 2, z + d / 2, fw, fd, y, H);
     L.bounds.set(node, { cx: x + w / 2, cz: z + d / 2, w: fw, d: fd, y0: y, y1: y + H });
     label(L, node, x + w / 2, y + H, z + d / 2, side / 2, depth);
@@ -323,6 +339,7 @@ function placeCity(L, node, x, z, w, d, y, depth) {
   }
   const gap = side * 0.025;
   const th = Math.min(Math.max(side * 0.012, 0.25), 6);
+  healthRim(L, node, x + w / 2, z + d / 2, w - 2 * gap, d - 2 * gap, y);
   box(L, node, x + w / 2, z + d / 2, w - 2 * gap, d - 2 * gap, y, th, slabColor(depth));
   L.bounds.set(node, { cx: x + w / 2, cz: z + d / 2, w: w - 2 * gap, d: d - 2 * gap, y0: y, y1: y + th });
   if (depth > 0) label(L, node, x + w / 2, y + th, z + gap, side / 2, depth);
@@ -353,6 +370,7 @@ function placeCircle(L, node, depth, a0, a1, maxS, from) {
     return;
   }
   const th = 1.2;
+  healthRim(L, node, cx, cz, side * 1.12, side * 1.12, 0, rot);
   box(L, node, cx, cz, side * 1.12, side * 1.12, 0, th, slabColor(depth + 1), { rot });
   const H = eff(node) > 0 ? 4 + 92 * Math.sqrt(eff(node) / maxS) : 0;
   if (H) column(L, node, cx, cz, side * 0.7, side * 0.7, th, H, { rot });
@@ -396,7 +414,7 @@ function village(L, node, x, z, r, depth) {
     return;
   }
   const go = canDrill(node) ? node : null;
-  cyl(L, null, x, z, r + 1.4, 0, 0.5, T.accent, { mat: 'glow' });
+  cyl(L, null, x, z, r + (showHealth && healthOf(node) ? 3 : 1.4), 0, 0.5, (showHealth && healthColor(healthOf(node))) || T.accent, { mat: 'glow' });
   cyl(L, node, x, z, r, 0, 1.4, slabColor(depth), { go });
   const houses = isLeaf(node) ? [node] : (node.kind === 'loose' ? node.k : kidsFor(node).filter((k) => k.kind !== 'free')).slice(0, VILLAGE_HOUSES);
   const smax = Math.max(1, ...houses.map(lsz));
@@ -704,6 +722,13 @@ function infoHTML(node) {
   if (node.kind === 'drive' && dr.fs) {
     const pct = Math.round((100 * dr.fs.used) / dr.fs.total);
     parts.push(`<div class="fs">Used ${fmt(dr.fs.used)} (${pct}%) · Free ${fmt(dr.fs.free)} · Total ${fmt(dr.fs.total)}</div>`);
+    const h = dr.health;
+    if (h) {
+      const bits = [h.model, h.temp != null && `${h.temp}°C`, h.hours != null && `${h.hours.toLocaleString()} hours on`,
+        h.realloc && `${h.realloc} reallocated`, h.pending && `${h.pending} pending`, h.used_pct != null && `${h.used_pct}% worn`].filter(Boolean);
+      parts.push(`<div class="health ${h.state}"><b>Health: ${HEALTH_LABEL[h.state] || h.state}</b> <span>${esc(bits.join(' · '))}</span>`
+        + `${(h.notes || []).length ? `<div>${esc(h.notes.join('; '))}</div>` : h.note ? `<div>${esc(h.note)}</div>` : ''}</div>`);
+    }
   } else if (hasFree(node) && node.free) {
     parts.push(`<div class="fs">Free ${fmt(node.free)}</div>`);
   }
@@ -1054,8 +1079,11 @@ function table(data) {
       const alert = pct >= limit ? `<span class="alert" title="at or above the ${limit}% alert line">⚠ ${Math.round(pct)}% full</span>` : '';
       const why = dr.why ? ` (live scan: ${dr.why})` : '';
       const title = `${dr.path} · ${dr.source === 'live' ? 'live scan' : dr.source === 'snapshot' ? 'snapshot' : 'no data'} ${clock(dr.when)}${why}`;
-      rows.push(`<tr class="drv" data-d="${di}" data-r="${ri}" title="${esc(title)}"><td class="name">${esc(dr.name)}${alert}`
-        + `<span class="sub">${miniBar(node, fs)}${spark(history[dev.id + '/' + dr.name])}</span></td>`
+      const h = dr.health;
+      const dot = failing(node) ? '<i class="fail" title="SMART says this drive is failing">●</i>' : '';
+      const hl = showHealth && h ? `<span class="hl ${h.state}"><b>${HEALTH_LABEL[h.state] || h.state}</b>${h.temp != null ? ` ${h.temp}°C` : ''}${h.hours != null ? ` · ${h.hours.toLocaleString()} h` : ''}${(h.notes || [])[0] ? ` · ${esc(h.notes[0])}` : h.note ? ` · ${esc(h.note)}` : ''}</span>` : '';
+      rows.push(`<tr class="drv" data-d="${di}" data-r="${ri}" title="${esc(title)}"><td class="name">${dot}${esc(dr.name)}${alert}`
+        + `<span class="sub">${miniBar(node, fs)}${spark(history[dev.id + '/' + dr.name])}</span>${hl}</td>`
         + cell(fs && fs.used) + cell(fs && fs.free) + cell(fs && fs.total)
         + node.c.map((v, i) => cell(v, unknown, !catsOn[i])).join('') + '</tr>');
       if (fs) { tot.used += fs.used; tot.free += fs.free; tot.total += fs.total; }
@@ -1242,6 +1270,18 @@ $('#list').addEventListener('click', (e) => {
 });
 $('#listBtn').addEventListener('click', () => { listOn = !listOn; showList(); });
 
+const healthBtn = $('#healthBtn');
+healthBtn.setAttribute('aria-pressed', String(showHealth));
+healthBtn.addEventListener('click', () => {
+  showHealth = prefs.health = !showHealth;
+  savePrefs();
+  healthBtn.setAttribute('aria-pressed', String(showHealth));
+  if (!api) return;
+  rebuild();
+  table(api);
+  showCard();
+});
+
 // ---------- controls ----------
 
 function markView() {
@@ -1380,6 +1420,7 @@ async function load() {
   lastText = text;
   api = JSON.parse(text);
   units = (api.ui && api.ui.units) || 'binary';
+  $('#healthBtn').hidden = !(api.ui && api.ui.health);
   if (!prefs.view && api.ui && VIEWS.includes(api.ui.view) && view !== api.ui.view) { view = api.ui.view; markView(); }
   try { history = await (await fetch('/api/history?days=90')).json(); } catch { history = {}; }
   const path = [];

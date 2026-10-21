@@ -5,10 +5,16 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- Drive health (Scrutiny pairing or built-in smartctl), hidden by default.
 - Notifications: ntfy, Discord and email.
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.5.0] - drive health, hidden by default
+
+### Added
+- **Drive health** from an existing Scrutiny (matched by WWN or serial) or built-in SMART (`smartctl -a -j`, with `-d sat` for USB enclosures). Hidden until you press **Health**: then the table shows OK / Warning / Failing with temperature, hours and sector counts, and drives get a green, amber or red rim in the 3D views. Each drive's info card always shows its health.
+- A small red dot marks a drive that is actually failing, even with Health off; Settings → Health can turn it off.
+- The scanner reports each drive's disk and its /dev/disk/by-id names.
 
 ## [0.4.0] - search and the list view
 

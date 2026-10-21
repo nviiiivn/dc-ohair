@@ -17,7 +17,7 @@ from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
@@ -143,6 +143,7 @@ class Hub:
         self.next = None
         self.lock = threading.Lock()
         self.sessions = Sessions()
+        self._scrutiny = (0, {}, None)
 
     @property
     def auth(self):
@@ -173,11 +174,70 @@ class Hub:
                     drives.append({'name': name, 'path': want['path'], 'source': 'none', 'why': got.get('error')})
             devices.append({'id': dev['id'], 'name': dev['name'], 'note': dev.get('note', ''),
                             'hub': bool(dev.get('local')), 'status': status.get(dev['id']), 'drives': drives})
+        self.attach_health(devices)
         return {'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'version': VERSION,
                 'alert_percent': self.cfg['hub']['alert_percent'], 'ui': self.ui(), 'devices': devices}
 
     def ui(self):
-        return dict(UI_DEFAULTS, **(self.cfg['hub'].get('ui') or {}))
+        health = self.cfg['hub'].get('health') or {}
+        return dict(UI_DEFAULTS, **(self.cfg['hub'].get('ui') or {}),
+                    health=health.get('mode', 'off') != 'off' or bool(self.demo), failing_dot=health.get('failing_dot', True))
+
+    # ----- drive health -----
+
+    def scrutiny(self, fresh=False):
+        """Scrutiny's /api/summary, keyed by WWN and by 'serial:<serial>'. Cached for five minutes."""
+        hc = self.cfg['hub'].get('health') or {}
+        url = (hc.get('scrutiny_url') or '').rstrip('/')
+        when, cached, err = self._scrutiny
+        if not url:
+            return {}, 'no Scrutiny address set'
+        if not fresh and time.time() - when < (300 if not err else 60):
+            return cached, err
+        headers = {'Accept': 'application/json'}
+        if hc.get('scrutiny_token_cmd'):
+            headers['Authorization'] = 'Bearer ' + collect.password({'password_cmd': hc['scrutiny_token_cmd']})
+        out, err = {}, None
+        try:
+            req = urllib.request.Request(url + '/api/summary', headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as res:
+                data = json.load(res)
+            for wwn, item in ((data.get('data') or {}).get('summary') or {}).items():
+                dev, sm = item.get('device') or {}, item.get('smart') or {}
+                st = int(dev.get('device_status') or 0)
+                notes = (['SMART says the drive is failing'] if st & 1 else []) + (['Scrutiny: its attributes match drives that tend to fail'] if st & 2 else [])
+                h = {'state': 'failing' if st & 1 else 'warning' if st & 2 else 'ok', 'model': dev.get('model_name'),
+                     'serial': dev.get('serial_number'), 'temp': sm.get('temp'), 'hours': sm.get('power_on_hours'),
+                     'notes': notes, 'source': 'scrutiny'}
+                h = {k: v for k, v in h.items() if v not in (None, '')}
+                out[str(dev.get('wwn') or wwn).lower()] = h
+                if dev.get('serial_number'):
+                    out['serial:' + dev['serial_number'].lower()] = h
+        except (OSError, ValueError, AttributeError) as e:
+            err = "Couldn't read Scrutiny at %s: %s" % (url, e)
+        self._scrutiny = (time.time(), out, err)
+        return out, err
+
+    def attach_health(self, devices):
+        mode = (self.cfg['hub'].get('health') or {}).get('mode', 'off')
+        if self.demo:
+            return
+        if mode == 'off':
+            for dev in devices:
+                for d in dev['drives']:
+                    d.pop('health', None)
+            return
+        if mode != 'scrutiny':
+            return
+        table, _ = self.scrutiny()
+        for dev in devices:
+            for d in dev['drives']:
+                d.pop('health', None)
+                for i in (d.get('disk') or {}).get('ids', []):
+                    key = i[4:].lower() if i.startswith('wwn-') else 'serial:' + i.rsplit('_', 1)[-1].lower()
+                    if key in table:
+                        d['health'] = table[key]
+                        break
 
     def drives(self, city=None):
         city = city or self.city()
@@ -604,6 +664,18 @@ class Handler(SimpleHTTPRequestHandler):
             for h in found['hosts']:
                 h['known'] = known.get(h['ip']) or known.get(h['name']) or ''
             return self.send_json(found)
+        if path == '/api/health/test':
+            cfg = json.loads(json.dumps(hub.cfg))
+            cfg['hub']['health'] = dict(cfg['hub'].get('health') or {}, **(data.get('health') or {}))
+            probe = Hub(cfg, demo=None)
+            table, err = probe.scrutiny(fresh=True)
+            if err:
+                return self.send_json({'ok': False, 'error': err})
+            disks = {k for k in table if not k.startswith('serial:')}
+            devices = hub.city()['devices']
+            probe.attach_health(devices)
+            matched = sum(1 for dv in devices for d in dv['drives'] if d.get('health'))
+            return self.send_json({'ok': True, 'disks': len(disks), 'matched': matched})
         if path in ('/api/push/token', '/api/push/revoke'):
             dev_id = data.get('id', '')
             try:
@@ -678,6 +750,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({'ok': True, 'host': 'demo-box', 'mounts': hub.demo['mounts']})
         if path == '/api/push/token':
             return self.send_json({'token': 'demo-token-not-real', 'hub': 'http://192.0.2.5:7171'})
+        if path == '/api/health/test':
+            return self.send_json({'ok': True, 'disks': 6, 'matched': 5})
         if path == '/api/discover':
             time.sleep(1.2)
             return self.send_json({'network': '192.0.2.0/24', 'hub': '192.0.2.5', 'hosts': hub.demo['found']})

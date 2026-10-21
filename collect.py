@@ -254,8 +254,11 @@ def category_defaults():
 
 def scan_spec(cfg, drives):
     scan = cfg['scan']
-    return {'min': parse_size(scan['min_size']), 'depth': int(scan['depth']), 'drives': drives,
+    spec = {'min': parse_size(scan['min_size']), 'depth': int(scan['depth']), 'drives': drives,
             'categories': scan.get('categories') or {}}
+    if (cfg['hub'].get('health') or {}).get('mode') == 'smart':
+        spec['health'] = 'smart'
+    return spec
 
 
 # ---------- scans ----------

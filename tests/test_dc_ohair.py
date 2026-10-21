@@ -170,6 +170,68 @@ class PushTest(unittest.TestCase):
             self.hub.take_report(dev, {'nope': 1})
 
 
+def load_agent():
+    import importlib.util
+    old = sys.argv
+    sys.argv = ['agent', base64.b64encode(b'{}').decode()]
+    try:
+        spec = importlib.util.spec_from_file_location('agent_mod', os.path.join(ROOT, 'agent.py'))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    finally:
+        sys.argv = old
+    return mod
+
+
+class HealthTest(unittest.TestCase):
+    def test_smart_summaries(self):
+        agent = load_agent()
+        ok = agent.summarize({'smart_status': {'passed': True}, 'temperature': {'current': 35}, 'power_on_time': {'hours': 1200},
+                              'ata_smart_attributes': {'table': [{'id': 5, 'raw': {'value': 0}}, {'id': 197, 'raw': {'value': 0}}]}}, 0)
+        self.assertEqual((ok['state'], ok['temp'], ok['hours']), ('ok', 35, 1200))
+        warn = agent.summarize({'smart_status': {'passed': True}, 'ata_smart_attributes': {'table': [{'id': 5, 'raw': {'value': 8}}]}}, 0)
+        self.assertEqual(warn['state'], 'warning')
+        self.assertIn('8 reallocated sectors', warn['notes'])
+        nvme = agent.summarize({'smart_status': {'passed': True}, 'nvme_smart_health_information_log': {'media_errors': 0, 'percentage_used': 95}}, 0)
+        self.assertEqual(nvme['state'], 'warning')
+        bad = agent.summarize({'smart_status': {'passed': False}}, 8)
+        self.assertEqual(bad['state'], 'failing')
+
+
+class ScrutinyTest(unittest.TestCase):
+    def test_summary_is_matched_by_wwn_and_serial(self):
+        import http.server, threading
+        summary = {'success': True, 'data': {'summary': {
+            '0x5000cca264eb01d7': {'device': {'wwn': '0x5000cca264eb01d7', 'serial_number': 'AAA111', 'model_name': 'HDD', 'device_status': 0},
+                                   'smart': {'temp': 34, 'power_on_hours': 100}},
+            '0x5000cca264ec3183': {'device': {'wwn': '0x5000cca264ec3183', 'serial_number': 'BBB222', 'model_name': 'HDD2', 'device_status': 1},
+                                   'smart': {'temp': 50, 'power_on_hours': 200}}}}}
+
+        class Fake(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps(summary).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(('127.0.0.1', 0), Fake)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        cfg = collect.validate({'hub': {'health': {'mode': 'scrutiny', 'scrutiny_url': 'http://127.0.0.1:%d' % srv.server_port}}})
+        h = hub.Hub(cfg)
+        devices = [{'drives': [{'name': 'A', 'disk': {'ids': ['wwn-0x5000cca264eb01d7']}},
+                               {'name': 'B', 'disk': {'ids': ['ata-HDD2_BBB222']}},
+                               {'name': 'C', 'disk': {'ids': ['ata-OTHER_ZZZ']}}]}]
+        h.attach_health(devices)
+        srv.shutdown()
+        a, b, c = devices[0]['drives']
+        self.assertEqual((a['health']['state'], a['health']['temp']), ('ok', 34))
+        self.assertEqual(b['health']['state'], 'failing')
+        self.assertNotIn('health', c)
+
+
 class DiscoverTest(unittest.TestCase):
     def test_only_small_private_networks(self):
         import discover

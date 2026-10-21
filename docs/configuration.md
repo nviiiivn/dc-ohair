@@ -39,6 +39,10 @@ hub:
   alert_webhook: ""
   history_days: 400
   public_url: ""          # the address push agents use; empty = this machine's LAN address
+  health:
+    mode: "off"           # off, scrutiny or smart
+    scrutiny_url: ""
+    failing_dot: true
   ui:
     view: city
     units: binary
@@ -62,6 +66,10 @@ hub:
 | `alert_webhook` | `""` | Optional. A URL that gets a short POST the first time a drive crosses `alert_percent`. An [ntfy](https://ntfy.sh) topic URL works as-is. |
 | `history_days` | `400` | How long to keep used/free history, which feeds the sparklines in the table. |
 | `public_url` | The address the push agent uses to reach the hub, like `https://disks.example.com`. Empty means this machine's LAN address and `port`. |
+| `health.mode` | Where drive health comes from: `off` (default), `scrutiny` or `smart`. |
+| `health.scrutiny_url` | Your Scrutiny's address, like `http://scrutiny.local:8080`. |
+| `health.scrutiny_token_cmd` | Optional. A command that prints a token for a Scrutiny behind a login; sent as `Authorization: Bearer`. |
+| `health.failing_dot` | Show a small red dot on failing drives even with Health off. Default `true`. |
 | `ui.view` | `city` | The default view for someone who hasn't picked one: `city`, `circle` or `epcot`. |
 | `ui.units` | `binary` | `binary` shows sizes in powers of 1024 (a "2 TB" drive shows as 1.82T). `decimal` uses powers of 1000 (2.00TB). |
 | `theme.default` | `dark` | The theme for someone who hasn't picked one: `dark`, `light`, `sepia`, `cyberpunk`, `matrix` or `ocean`. |

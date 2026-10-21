@@ -315,3 +315,20 @@ footer .note { flex: 1; font-size: 13px; }
   #list { top: 150px; bottom: 70px; left: 6px; right: 6px; }
 }
 #list th:first-child { text-align: left; }
+
+/* drive health: hidden unless toggled, except the failing dot */
+#healthBtn { padding: 6px 12px; cursor: pointer; color: var(--text2); }
+#healthBtn[aria-pressed="true"] { color: var(--bg); background: var(--green); border-color: var(--green); font-weight: 650; }
+i.fail { color: var(--red); font-style: normal; font-size: 10px; margin-right: 4px; vertical-align: 1px; }
+.hl { display: block; font-size: 11px; color: var(--text2); margin-top: 2px; white-space: normal; }
+.hl b { font-weight: 650; margin-right: 2px; }
+.hl.ok b { color: var(--green); }
+.hl.warning b { color: #f5a524; }
+.hl.failing b { color: var(--red); }
+.info .health { margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: var(--ch-bg); }
+.info .health span { color: var(--text2); }
+.info .health div { margin-top: 2px; }
+.info .health.ok b { color: var(--green); }
+.info .health.warning b { color: #f5a524; }
+.info .health.failing b { color: var(--red); }
+.settings label.tick { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
