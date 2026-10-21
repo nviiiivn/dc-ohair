@@ -1,0 +1,27 @@
+/* The toolbox panel (toolbox.js): the List panel's place and look, for the tools. */
+#toolsBtn { padding: 6px 12px; cursor: pointer; color: var(--text2); }
+#toolsBtn[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 650; }
+#toolbox { position: absolute; top: 96px; left: 12px; width: min(620px, calc(100% - 24px)); bottom: 110px; z-index: 4;
+  display: flex; flex-direction: column; padding: 8px 10px; background: color-mix(in srgb, var(--surface) 97%, transparent); }
+#toolbox header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#toolbox .x { border: 0; background: none; color: var(--text2); font-size: 16px; cursor: pointer; }
+#toolbox .scroll { overflow: auto; margin-top: 6px; font-size: 13px; }
+#toolbox .sum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; margin: 4px 0; font-size: 14px; }
+#toolbox .sum span { flex: 1 1 260px; }
+#toolbox .groups, #toolbox .copies { list-style: none; margin: 0; padding: 0; }
+#toolbox .grp { border-top: 1px solid var(--border); }
+#toolbox .row, #toolbox .copies li { display: flex; align-items: center; gap: 8px; padding: 6px 4px; cursor: pointer; }
+#toolbox .row:hover, #toolbox .copies li:hover { background: var(--ch-hover); }
+#toolbox .grp.open > .row { font-weight: 650; }
+#toolbox .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#toolbox .nm small, #toolbox b small { display: block; color: var(--text2); font-size: 11px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+#toolbox b { text-align: right; white-space: nowrap; }
+#toolbox .copies { margin: 0 0 6px 10px; border-left: 2px solid #ff3b6b; }
+#toolbox .copies .q { color: var(--text2); white-space: nowrap; font-size: 12px; }
+#toolbox .badge { min-width: 38px; text-align: center; font-size: 11px; padding: 2px 6px; border-radius: 6px;
+  background: var(--ch-bg); color: var(--text2); }
+#toolbox .keep .badge { background: var(--green, #2bb673); color: var(--bg); }
+#toolbox .sure { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--ch-bg); }
+#toolbox .s-hash { background: var(--green, #2bb673); color: var(--bg); }
+#toolbox .s-partial, #toolbox .s-name { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+@media (max-width: 700px) { #toolbox { top: 88px; bottom: calc(var(--peek, 0px) + 64px); width: auto; right: 12px; } }

@@ -7,6 +7,7 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/themes.css?v=0.8.0">
 <link rel="stylesheet" href="/style.css?v=0.8.0">
+<link rel="stylesheet" href="/toolbox.css?v=0.8.0">
 <script src="/theme-config.js"></script>
 <script src="/theme-boot.js?v=0.8.0"></script>
 <script type="importmap">
@@ -34,6 +35,7 @@
           <button type="button" data-view="epcot">EPCOT</button>
         </div>
         <button type="button" id="listBtn" class="float" aria-pressed="false" title="A plain list of what's here">List</button>
+        <button type="button" id="toolsBtn" class="float" aria-pressed="false" title="Duplicates and other tools" hidden>Tools</button>
         <button type="button" id="healthBtn" class="float" aria-pressed="false" title="Show drive health" hidden>Health</button>
         <label class="pick"><span class="lbl">Sort</span>
           <select id="sort">
@@ -56,6 +58,7 @@
     <div id="legend"></div>
     <aside id="card" aria-live="polite"></aside>
     <section id="list" class="float" aria-label="List of what's here" hidden></section>
+    <section id="toolbox" class="float" aria-label="Toolbox" hidden></section>
     <div id="tip" hidden></div>
     <div id="msg">Hold on to your butts…</div>
     <button id="paneToggle" type="button" aria-controls="panel" aria-expanded="true">
@@ -95,5 +98,6 @@
   </aside>
 </main>
 <script type="module" src="/app.js?v=0.8.0"></script>
+<script type="module" src="/toolbox.js?v=0.8.0"></script>
 </body>
 </html>

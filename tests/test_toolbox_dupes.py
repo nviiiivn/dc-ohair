@@ -1,10 +1,15 @@
 """Tests for the toolbox's name parser and duplicate finder. Run: python3 -m unittest"""
-import os, sys, unittest
+import os, sys, tempfile, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+os.environ.setdefault('DC_DATA', tempfile.mkdtemp(prefix='dc-ohair-test-'))
 
-from toolbox import dupes, media  # noqa: E402
+import collect  # noqa: E402
+import demo  # noqa: E402
+import hub  # noqa: E402
+from toolbox import api, dupes, media  # noqa: E402
+from toolbox import demo as toolbox_demo  # noqa: E402
 
 GB = 10 ** 9
 MUSIC, GAMES, SERIES, MOVIES, OTHER = range(5)
@@ -67,6 +72,12 @@ class ParseTest(unittest.TestCase):
         self.assertGreater(media.score(remux), media.score(web))
         self.assertGreater(media.score(web, 5 * GB), media.score(web, 3 * GB))
 
+    def test_an_untagged_big_copy_beats_a_tagged_small_one(self):
+        bare = media.parse('/m/Heat (1995).mkv')
+        small = media.parse('/m/Heat.1995.720p.WEBRip.x264.mkv')
+        self.assertGreater(media.score(bare, 20 * GB), media.score(small, 2 * GB))
+        self.assertEqual(media.label(bare), 'unknown quality')
+
 
 class DupesTest(unittest.TestCase):
     def setUp(self):
@@ -125,6 +136,47 @@ class DupesTest(unittest.TestCase):
         r = dupes.report(self.city, min_size=GB)
         self.assertEqual(r['wasted_films'], sum(g['wasted'] for g in r['films']))
         self.assertEqual(r['files'], 12)
+
+
+def off_totals(tree):
+    """How many folders' totals are not the sum of what is in them."""
+    bad, stack = 0, [tree]
+    while stack:
+        n = stack.pop()
+        kids = n.get('k') or []
+        if kids:
+            bad += [sum(k['c'][i] for k in kids) for i in range(5)] != n['c']
+            stack.extend(kids)
+    return bad
+
+
+class ApiTest(unittest.TestCase):
+    def test_the_demo_gets_duplicates_and_keeps_its_totals_right(self):
+        d = demo.build()
+        before = [off_totals(dr['tree']) for dev in d['city']['devices'] for dr in dev['drives']]
+        r = toolbox_demo.plant(d['city'])
+        after = [off_totals(dr['tree']) for dev in d['city']['devices'] for dr in dev['drives']]
+        self.assertEqual(before, after)
+        self.assertGreaterEqual(len(r['films']), 9)
+        self.assertTrue(any(g['sure'] == 'name' for g in r['bytes']))
+
+    def test_the_api_sends_the_report_through_the_hubs_handler(self):
+        d = demo.build()
+        toolbox_demo.plant(d['city'])
+
+        class Request:
+            hub = hub.Hub(collect.validate(d['config']), demo=d)
+            sent = {}
+
+            def send_json(self, obj, code=200):
+                self.sent.update(obj=obj, code=code)
+
+        req = Request()
+        api.get(req, '/api/tools/dupes', 'min=0')
+        self.assertEqual(req.sent['code'], 200)
+        self.assertEqual(req.sent['obj']['groups_films'], len(req.sent['obj']['films']))
+        api.get(req, '/api/tools/nothing', '')
+        self.assertEqual(req.sent['code'], 404)
 
 
 if __name__ == '__main__':

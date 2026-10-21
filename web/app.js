@@ -663,8 +663,59 @@ function rebuild() {
   }
   layout.labels.sort((a, b) => a.depth - b.depth || eff(b.node) - eff(a.node));
   layout.labels.length = Math.min(layout.labels.length, 900);
+  drawMarks();
   setHover(null);
   dirty = true;
+}
+
+// ---------- marks: what the toolbox points at (toolbox.js, through window.dcCity) ----------
+
+// Each mark is a {device, path} from the toolbox, outlined on the nearest
+// building this view draws: the file itself when its folder is open, else the
+// folder, drive or device it is in, so a duplicate deep down shows at every
+// level. Kept as paths, not nodes, so a reload of the city keeps them.
+let marks = [];
+let markColor = '#ff3b6b';
+const markMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.95, depthTest: false });
+
+function nodeFor(device, path) {
+  const dn = all && all.k.find((d) => d.dev && d.dev.id === device);
+  if (!dn || typeof path !== 'string') return null;
+  let drive = null;
+  for (const d of dn.k) {
+    const p = d.drive && d.drive.path;
+    if (p && (path === p || path.startsWith(p.replace(/\/$/, '') + '/')) && (!drive || p.length > drive.drive.path.length)) drive = d;
+  }
+  if (!drive) return null;
+  let n = drive;
+  for (const name of path.slice(drive.drive.path.replace(/\/$/, '').length).split('/').filter(Boolean)) {
+    const k = n.k.find((x) => x.n === name);
+    if (!k) break;      // folded into "the rest" below the size cutoff: the deepest folder still stands for it
+    n = k;
+  }
+  return n;
+}
+
+function drawMarks() {
+  if (!marks.length || !layout) return;
+  const shown = new Set();
+  for (const m of marks) {
+    let n = nodeFor(m.device, m.path);
+    while (n && !layout.bounds.get(n)) n = parentOf(n);
+    if (n) shown.add(n);
+  }
+  if (!shown.size) return;
+  markMat.color.set(markColor);
+  const geo = new THREE.EdgesGeometry(unitBox);
+  for (const n of shown) {
+    const b = layout.bounds.get(n);
+    const o = new THREE.LineSegments(geo, markMat);
+    o.renderOrder = 9;
+    o.position.set(b.cx, b.y0, b.cz);
+    o.rotation.set(0, b.rot || 0, 0);
+    o.scale.set(b.w * 1.04, Math.max(b.y1 - b.y0, 0.2) * 1.04, b.d * 1.04);
+    world.add(o);
+  }
 }
 
 // data packets flowing along the EPCOT beams toward the mainframe
@@ -1527,6 +1578,25 @@ async function start() {
 document.addEventListener('dc:changed', () => { lastText = ''; start().catch((e) => { $('#msg').textContent = e.message; }); });
 document.addEventListener('click', (e) => { if (e.target.closest('[data-open-settings]')) openWizard(me); });
 $('#gear').addEventListener('click', () => openSettings(me));
+
+// What the toolbox (toolbox.js) may do with the city: find a file's building,
+// fly to it, and outline a set of files. Nothing else is reachable from outside.
+window.dcCity = {
+  ready: () => !!all,
+  inApp: IN_APP,
+  fmt: (b) => fmt(b),
+  goTo(device, path) {
+    const n = nodeFor(device, path);
+    if (n) goTo(n);
+    return !!n;
+  },
+  mark(list, color) {
+    marks = (list || []).filter((m) => m && m.device && m.path);
+    if (color) markColor = color;
+    if (layout) rebuild();
+    return marks.length;
+  },
+};
 
 markView();
 legend();

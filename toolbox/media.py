@@ -116,9 +116,20 @@ def parse(path):
     return info
 
 
+def guess_resolution(size, kind='movie'):
+    """A resolution rank from size alone, for a name with no quality tags: a
+    two-hour film is rarely under 4 GB at 1080p or 15 GB at 2160p (an episode
+    is about a quarter of that). Only for ranking; the label still says unknown."""
+    gb = size / 1e9 * (4 if kind == 'episode' else 1)
+    return 4 if gb >= 15 else 3 if gb >= 4 else 2 if gb >= 1.5 else 1 if size else 0
+
+
 def score(info, size=0):
-    """A sortable quality: higher is the better copy."""
-    return (info['res_rank'], info['src_rank'], info['hdr_rank'], info['codec_rank'], info['audio_rank'], size)
+    """A sortable quality: higher is the better copy. A name with no
+    resolution is ranked by its size's likely one, so an untagged 20 GB copy is
+    not beaten by a tagged 2 GB 720p."""
+    res = info['res_rank'] or guess_resolution(size, info.get('kind'))
+    return (res, info['src_rank'], info['hdr_rank'], info['codec_rank'], info['audio_rank'], size)
 
 
 def label(info):
