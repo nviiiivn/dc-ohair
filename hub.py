@@ -17,7 +17,7 @@ from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
@@ -222,6 +222,9 @@ class Hub:
     def public_config(self):
         cfg = json.loads(json.dumps(self.cfg))
         cfg['hub'].pop('admin_password', None)
+        for d in cfg['devices']:
+            if d.pop('push_token', None):
+                d['paired'] = True
         return cfg
 
     SECURITY_KEYS = ('auth', 'trusted_proxies', 'proxy_user_header', 'admin_password')
@@ -234,8 +237,82 @@ class Hub:
                 new['hub'][key] = self.cfg['hub'][key]
             else:
                 new['hub'].pop(key, None)
+        # enrollment tokens (stored hashed) only change through /api/push/token
+        tokens = {d['id']: d.get('push_token') for d in self.cfg['devices']}
+        for d in new['devices']:
+            d.pop('paired', None)
+            d.pop('push_token', None)
+            if tokens.get(d['id']):
+                d['push_token'] = tokens[d['id']]
         collect.save_config(new, self.path)
         self.cfg = new
+
+    # ----- push devices -----
+
+    def public_url(self, host_header=None):
+        """The address devices use to reach the hub: hub.public_url, else this machine's LAN address."""
+        if self.cfg['hub'].get('public_url'):
+            return self.cfg['hub']['public_url'].rstrip('/')
+        port = int(self.cfg['hub'].get('port', 7171))
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('192.0.2.1', 9))  # no packet is sent; this just picks the outgoing interface
+            ip = s.getsockname()[0]
+            s.close()
+        except OSError:
+            ip = (host_header or 'localhost').split(':')[0]
+        return 'http://%s:%d' % (ip, port)
+
+    def new_token(self, dev_id):
+        token = secrets.token_urlsafe(24)
+        cfg = json.loads(json.dumps(self.cfg))
+        for d in cfg['devices']:
+            if d['id'] == dev_id:
+                d['push'] = True
+                d['push_token'] = hashlib.sha256(token.encode()).hexdigest()
+                break
+        else:
+            raise KeyError(dev_id)
+        collect.save_config(collect.validate(cfg), self.path)
+        self.cfg = cfg
+        return token
+
+    def revoke(self, dev_id):
+        cfg = json.loads(json.dumps(self.cfg))
+        for d in cfg['devices']:
+            if d['id'] == dev_id:
+                d.pop('push_token', None)
+        collect.save_config(cfg, self.path)
+        self.cfg = cfg
+
+    def device_for(self, token):
+        if not token:
+            return None
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        for d in self.cfg['devices']:
+            if d.get('push_token') and hmac.compare_digest(d['push_token'], digest):
+                return d
+        return None
+
+    def push_spec(self, dev):
+        spec = collect.scan_spec(self.cfg, dev.get('drives') or 'auto')
+        times = clock_times(self.cfg['hub']['schedule'])
+        spec['schedule'] = '%02d:%02d' % times[0] if times else '04:30'
+        return spec
+
+    def take_report(self, dev, out):
+        if not isinstance(out, dict) or not isinstance(out.get('drives'), list):
+            raise ValueError('a report needs a drives list')
+        if not dev.get('drives'):
+            # first report from a device set to "pick the drives for me"
+            cfg = json.loads(json.dumps(self.cfg))
+            for d in cfg['devices']:
+                if d['id'] == dev['id']:
+                    d['drives'] = [{'name': x['name'], 'path': x['path']} for x in out['drives'] if x.get('name') and x.get('path')]
+            collect.save_config(collect.validate(cfg), self.path)
+            self.cfg = cfg
+        return collect.store(dev, out, self.cfg)
 
     def set_password(self, pw):
         self.cfg['hub']['admin_password'] = hash_password(pw)
@@ -312,6 +389,7 @@ class Handler(SimpleHTTPRequestHandler):
     hub = None
     logins = RateLimit(8, 600)
     probes = RateLimit(30, 60)
+    reports = RateLimit(30, 60)
 
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=WEB, **kw)
@@ -388,6 +466,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         self.extra_headers = []
         path, _, query = self.path.partition('?')
+        if path in ('/agent.py', '/push.py'):
+            with open(os.path.join(HERE, path[1:]), 'rb') as f:
+                return self.send_bytes(f.read(), 'text/x-python; charset=utf-8')
+        if path == '/api/push/spec':
+            dev = self.hub.device_for(self.bearer())
+            if not dev:
+                return self.send_json({'error': 'unknown or revoked enrollment token'}, 401)
+            return self.send_json(self.hub.push_spec(dev))
         if path == '/theme-config.js':
             theme = dict(THEME_DEFAULTS, **(self.hub.cfg['hub'].get('theme') or {}))
             return self.send_bytes(('window.DC_THEME = %s;\n' % json.dumps(theme)).encode(), 'text/javascript')
@@ -428,9 +514,34 @@ class Handler(SimpleHTTPRequestHandler):
     def do_PUT(self):
         return self.do_POST()
 
+    def bearer(self):
+        auth = self.headers.get('Authorization', '')
+        return auth[7:].strip() if auth.startswith('Bearer ') else None
+
+    def report(self):
+        """POST /api/report from a push agent: its scan result, signed with its enrollment token."""
+        if not self.reports.allow(self.client_ip()):
+            return self.send_json({'error': 'too many reports; try again in a minute'}, 429)
+        dev = self.hub.device_for(self.bearer())
+        if not dev:
+            return self.send_json({'error': 'unknown or revoked enrollment token'}, 401)
+        length = int(self.headers.get('Content-Length') or 0)
+        if length > 256 * 1024 * 1024:
+            return self.send_json({'error': 'report too big'}, 413)
+        raw = self.rfile.read(length)
+        try:
+            if self.headers.get('Content-Encoding') == 'gzip':
+                raw = gzip.decompress(raw)
+            msg = self.hub.take_report(dev, json.loads(raw))
+        except (OSError, ValueError, EOFError) as e:
+            return self.send_json({'error': 'could not read that report: %s' % e}, 400)
+        return self.send_json({'ok': True, 'msg': msg})
+
     def do_POST(self):
         self.extra_headers = []
         path = self.path.partition('?')[0]
+        if path == '/api/report':
+            return self.report()
         # every write needs a custom header, which a cross-site page can't send without CORS (never granted)
         if self.headers.get('X-DC') != '1':
             return self.send_json({'error': 'missing X-DC header'}, 403)
@@ -476,6 +587,16 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:  # yaml errors
                 return self.send_json({'error': 'Could not read that config: %s' % e}, 400)
             return self.send_json(self.settings_payload())
+        if path in ('/api/push/token', '/api/push/revoke'):
+            dev_id = data.get('id', '')
+            try:
+                if path.endswith('/revoke'):
+                    hub.revoke(dev_id)
+                    return self.send_json({'ok': True})
+                token = hub.new_token(dev_id)
+            except KeyError:
+                return self.send_json({'error': 'Save the device first, then make its command.'}, 404)
+            return self.send_json({'token': token, 'hub': hub.public_url(self.headers.get('Host'))})
         if path in ('/api/test', '/api/detect'):
             if not self.probes.allow(self.client_ip()):
                 return self.send_json({'error': 'Slow down a little.'}, 429)
@@ -538,6 +659,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/detect':
             time.sleep(0.6)
             return self.send_json({'ok': True, 'host': 'demo-box', 'mounts': hub.demo['mounts']})
+        if path == '/api/push/token':
+            return self.send_json({'token': 'demo-token-not-real', 'hub': 'http://192.0.2.5:7171'})
         return self.send_json({'error': 'Not in demo mode.'}, 403)
 
     def settings_payload(self):

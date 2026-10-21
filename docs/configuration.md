@@ -38,6 +38,7 @@ hub:
   alert_percent: 90
   alert_webhook: ""
   history_days: 400
+  public_url: ""          # the address push agents use; empty = this machine's LAN address
   ui:
     view: city
     units: binary
@@ -60,6 +61,7 @@ hub:
 | `alert_percent` | `90` | Drives this full or fuller get a **⚠ N% full** marker in the table and show up in `/api/alerts`. |
 | `alert_webhook` | `""` | Optional. A URL that gets a short POST the first time a drive crosses `alert_percent`. An [ntfy](https://ntfy.sh) topic URL works as-is. |
 | `history_days` | `400` | How long to keep used/free history, which feeds the sparklines in the table. |
+| `public_url` | The address the push agent uses to reach the hub, like `https://disks.example.com`. Empty means this machine's LAN address and `port`. |
 | `ui.view` | `city` | The default view for someone who hasn't picked one: `city`, `circle` or `epcot`. |
 | `ui.units` | `binary` | `binary` shows sizes in powers of 1024 (a "2 TB" drive shows as 1.82T). `decimal` uses powers of 1000 (2.00TB). |
 | `theme.default` | `dark` | The theme for someone who hasn't picked one: `dark`, `light`, `sepia`, `cyberpunk`, `matrix` or `ocean`. |
@@ -138,6 +140,7 @@ devices:
 | `host`, `user`, `port` | How to reach it over SSH. `port` is optional (22). |
 | `password_cmd` | Optional. A command the hub runs at scan time; whatever it **prints** is used as the SSH password (via `sshpass`, through an environment variable). Write it as a string to run it through the shell, or as a list (`["pass", "show", "nas/ssh"]`) to run it without one. The password is never saved. See [security.md](security.md). |
 | `command_prefix` | Optional. Put in front of the scanner on the device, such as `caffeinate -i` (keeps a Mac awake) or `nice -n 19` (keeps the scan polite). |
+| `push: true` | The device sends its own reports with the push agent instead of the hub logging in. Its enrollment token is stored only as a SHA-256 hash (`push_token`), and it's set from **Settings**, not by hand. See [setup.md](setup.md#devices-the-hub-cant-reach-the-push-agent). |
 | `drives` | The drives or folders to scan. |
 
 Without `password_cmd`, the hub logs in with keys only and never waits at a password prompt: its own key (in `~/.config/dc-ohair/ssh/`, or `/data/ssh/` in Docker), plus the hub user's usual SSH keys and agent.

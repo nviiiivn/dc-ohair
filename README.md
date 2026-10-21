@@ -120,6 +120,10 @@ Press **Find drives** to list the device's drives, and **Test connection** to ch
 
 <p align="center"><img src="docs/media/wizard-2.png" width="760" alt="Step 2: adding another device"></p>
 
+Can't reach it over SSH at all, or it's Windows? Choose **It sends to the hub**. You get one command to paste on the device (a PowerShell line for Windows), and the page waits until the device reports in. See [docs/setup.md](docs/setup.md#devices-the-hub-cant-reach-the-push-agent).
+
+<p align="center"><img src="docs/media/push.png" width="760" alt="The install command for a device that sends its own reports"></p>
+
 Can't use a key? Choose **password_cmd** instead. That's a command the hub runs at scan time to *print* the password, such as a password-manager lookup. The password is never saved. See [docs/security.md](docs/security.md).
 
 ### Step 3: First scan
@@ -304,7 +308,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **Push agent.** For devices the hub can't reach, or Windows: pick an OS and get one copy-paste command with an enrollment token in it (a shell one-liner for Linux, macOS, LibreELEC and NAS boxes, and PowerShell for Windows). It can optionally schedule itself, and the wizard shows "Waiting for *device*…" until it reports in.
 - **Find devices on my network.** An opt-in LAN check for SSH and SMB. You get a yes/no checklist of what it found, plus "+ Add your own".
 - **Search.** Find any file or folder on any device and fly to it.
 - **List view.** A fast, plain, sortable list of the biggest files and folders, one click away from any 3D view.

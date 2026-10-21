@@ -130,6 +130,46 @@ class KeyTest(unittest.TestCase):
         self.assertEqual(args, ['-i', os.path.join(home, '.ssh', 'id_ed25519'), '-i', os.path.join(home, 'hub', 'id_ed25519')])
 
 
+class PushTest(unittest.TestCase):
+    def setUp(self):
+        self.path = tempfile.mktemp(suffix='.yml')
+        cfg = collect.validate({'devices': [{'id': 'pc', 'name': 'PC', 'push': True, 'drives': []}]})
+        collect.save_config(cfg, self.path)
+        self.hub = hub.Hub(collect.load_config(self.path), self.path)
+
+    def tearDown(self):
+        for p in (self.path, self.path + '.bak'):
+            if os.path.exists(p):
+                os.unlink(p)
+
+    def test_token_is_stored_hashed_and_finds_its_device(self):
+        token = self.hub.new_token('pc')
+        with open(self.path) as f:
+            self.assertNotIn(token, f.read())
+        self.assertEqual(self.hub.device_for(token)['id'], 'pc')
+        self.assertIsNone(self.hub.device_for('wrong'))
+        self.assertNotIn('push_token', self.hub.public_config()['devices'][0])
+        self.assertTrue(self.hub.public_config()['devices'][0]['paired'])
+
+    def test_settings_save_keeps_the_token_and_revoke_drops_it(self):
+        token = self.hub.new_token('pc')
+        self.hub.save_config(self.hub.public_config())
+        self.assertIsNotNone(self.hub.device_for(token))
+        self.hub.revoke('pc')
+        self.assertIsNone(self.hub.device_for(token))
+
+    def test_first_report_picks_the_drives(self):
+        self.hub.new_token('pc')
+        dev = self.hub.cfg['devices'][0]
+        self.assertEqual(self.hub.push_spec(dev)['drives'], 'auto')
+        out = {'drives': [{'name': 'C', 'path': 'C:\\', 'fs': {'used': 1, 'free': 1, 'total': 2}, 'tree': {'n': 'C', 'c': [0, 0, 0, 0, 1]}}],
+               'secs': 1, 'scanned': '2026-01-01T00:00:00+0000'}
+        self.hub.take_report(dev, out)
+        self.assertEqual(self.hub.cfg['devices'][0]['drives'], [{'name': 'C', 'path': 'C:\\'}])
+        with self.assertRaises(ValueError):
+            self.hub.take_report(dev, {'nope': 1})
+
+
 class HubTest(unittest.TestCase):
     def test_clock_times_reads_yaml_sexagesimal(self):
         self.assertEqual(hub.clock_times(['04:30', 270, '23:05']), [(4, 30), (4, 30), (23, 5)])

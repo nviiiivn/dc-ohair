@@ -5,13 +5,24 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- Push agent with per-device enrollment tokens (shell and PowerShell), plus "waiting for device" pairing.
 - Opt-in LAN discovery with a yes/no checklist and "+ Add your own".
 - Search with fly-to.
 - Drive health (Scrutiny pairing or built-in smartctl), hidden by default.
 - Notifications: ntfy, Discord and email.
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.2.0] - the push agent
+
+### Added
+- **Push agent** (`push.py`) for devices the hub can't reach, Windows included: one copy-paste command per device (Linux, macOS, LibreELEC / Kodi, NAS, PowerShell for Windows) with a per-device enrollment token, a daily schedule (systemd timer, cron, launchd or Task Scheduler), and a "Waiting for the device…" screen that turns green on the first report.
+- Enrollment tokens are stored hashed and can be revoked in Settings → Security.
+- A push device with no drives picked reports its own real drives first.
+- The scanner runs on Windows (drive letters, `shutil.disk_usage`).
+- `hub.public_url` for the address devices report to.
+
+### Fixed
+- Once the hub had its own SSH key, devices that only knew the user's usual key turned the hub away, because naming a key with `-i` makes ssh skip its default keys. The hub now offers both.
 
 ## [0.1.0] - first release
 

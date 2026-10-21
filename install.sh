@@ -100,7 +100,7 @@ esac
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 mkdir -p "$APP" "$DATA"
 if [[ -f "$HERE/hub.py" && -f "$HERE/agent.py" ]]; then
-  [[ "$HERE" != "$APP" ]] && cp -R "$HERE/agent.py" "$HERE/collect.py" "$HERE/hub.py" "$HERE/demo.py" \
+  [[ "$HERE" != "$APP" ]] && cp -R "$HERE/agent.py" "$HERE/collect.py" "$HERE/hub.py" "$HERE/demo.py" "$HERE/push.py" \
     "$HERE/requirements.txt" "$HERE/web" "$HERE/systemd" "$HERE/devices.example.yml" "$APP/"
 else
   command -v git >/dev/null || { echo "Run this from a copy of the repo, or install git so it can fetch one."; exit 1; }

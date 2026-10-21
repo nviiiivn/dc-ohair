@@ -65,10 +65,10 @@ def validate(cfg):
             raise ValueError('every device needs a unique id made of letters, digits, - _ or . (got %r)' % dev_id)
         seen.add(dev_id)
         dev.setdefault('name', dev_id)
-        if not dev.get('local') and not ssh_target(dev):
-            raise ValueError('device %s needs either local: true or a host to ssh to' % dev_id)
+        if not dev.get('local') and not dev.get('push') and not ssh_target(dev):
+            raise ValueError('device %s needs local: true, push: true, or a host to ssh to' % dev_id)
         for d in dev.setdefault('drives', []) or []:
-            if not d.get('name') or not str(d.get('path', '')).startswith('/'):
+            if not d.get('name') or not re.match(r'^(/|[A-Za-z]:[\\/])', str(d.get('path', ''))):
                 raise ValueError('every drive on %s needs a name and an absolute path' % dev_id)
     return cfg
 
@@ -296,20 +296,28 @@ def record_history(dev_id, out, keep_days):
         os.replace(path + '.tmp', path)
 
 
+def store(dev, out, cfg):
+    """Saves one scan result, whether the hub fetched it or the device pushed it."""
+    save(os.path.join(DATA, dev['id'] + '.json'), out)
+    record_history(dev['id'], out, int(cfg['hub']['history_days']))
+    bad = [d['name'] + ': ' + d['error'] for d in out['drives'] if 'error' in d]
+    msg = '; '.join(bad) or '%s in %ss' % ('pushed' if dev.get('push') else 'scanned', out.get('secs', '?'))
+    set_status(dev['id'], not bad, msg)
+    return msg
+
+
 def collect(dev, cfg):
     progress[dev['id']] = {'state': 'scanning', 'since': time.time()}
     out, err = run_agent(dev, scan_spec(cfg, dev['drives']), float(cfg['scan']['timeout_hours']) * 3600)
     if err:
         return set_status(dev['id'], False, err)
-    save(os.path.join(DATA, dev['id'] + '.json'), out)
-    record_history(dev['id'], out, int(cfg['hub']['history_days']))
-    bad = [d['name'] + ': ' + d['error'] for d in out['drives'] if 'error' in d]
-    set_status(dev['id'], not bad, '; '.join(bad) or 'scanned in %ss' % out['secs'])
+    store(dev, out, cfg)
 
 
 def collect_all(cfg, only=None):
     os.makedirs(DATA, exist_ok=True)
-    devices = [d for d in cfg['devices'] if (not only or d['id'] in only) and d.get('drives')]
+    # push devices send their own reports; the hub can't start their scans
+    devices = [d for d in cfg['devices'] if (not only or d['id'] in only) and d.get('drives') and not d.get('push')]
     for d in devices:
         progress[d['id']] = {'state': 'waiting'}
     threads = [threading.Thread(target=collect, args=(d, cfg)) for d in devices]

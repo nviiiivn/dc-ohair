@@ -72,6 +72,7 @@ export function showLogin(me) {
 
 function authOf(dev) {
   if (dev.local) return 'local';
+  if (dev.push) return 'push';
   return dev.password_cmd ? 'cmd' : 'key';
 }
 
@@ -130,8 +131,10 @@ function deviceForm(dev, payload, opts = {}) {
       <label><input type="radio" name="auth" value="local" ${auth === 'local' ? 'checked' : ''}> This machine</label>
       <label><input type="radio" name="auth" value="key" ${auth === 'key' ? 'checked' : ''}> SSH key <small>recommended</small></label>
       <label><input type="radio" name="auth" value="cmd" ${auth === 'cmd' ? 'checked' : ''}> password_cmd</label>
+      <label><input type="radio" name="auth" value="push" ${auth === 'push' ? 'checked' : ''}> It sends to the hub <small>Windows, or out of reach</small></label>
     </fieldset>
-    ${auth === 'local' ? '' : `<div class="grid3">
+    ${auth === 'push' ? pushHelp(dev) : ''}
+    ${auth === 'local' || auth === 'push' ? '' : `<div class="grid3">
       <label>Host <input data-f="host" value="${esc(dev.host)}" placeholder="192.168.1.20 or nas.local" class="mono"></label>
       <label>User <input data-f="user" value="${esc(dev.user)}" placeholder="me" class="mono"></label>
       <label>Port <input data-f="port" value="${esc(dev.port)}" placeholder="22" inputmode="numeric" class="mono"></label>
@@ -144,19 +147,69 @@ function deviceForm(dev, payload, opts = {}) {
       <label>Id <input data-f="id" value="${esc(dev.id)}" class="mono"></label>
     </details>
     <h4>Drives</h4>
-    <div class="drives">${drives || '<p class="muted">No drives yet. Find them, or add a path.</p>'}</div>
+    <div class="drives">${drives || (auth === 'push' ? '<p class="muted">Leave this empty and the device picks its own real drives on its first report. You can untick them here afterwards.</p>' : '<p class="muted">No drives yet. Find them, or add a path.</p>')}</div>
     <div class="row">
-      <button type="button" data-act="detect">Find drives</button>
+      ${auth === 'push' ? '' : '<button type="button" data-act="detect">Find drives</button>'}
       <button type="button" class="ghost" data-act="add-drive">+ Add a path</button>
-      <button type="button" class="ghost" data-act="test">Test connection</button>
-      ${opts.saved ? '<button type="button" class="ghost" data-act="scan">Scan now</button>' : ''}
+      ${auth === 'push' ? '' : '<button type="button" class="ghost" data-act="test">Test connection</button>'}
+      ${opts.saved && auth !== 'push' ? '<button type="button" class="ghost" data-act="scan">Scan now</button>' : ''}
     </div>
     <div class="result" aria-live="polite"></div>
   </div>`;
 }
 
-// wires a deviceForm rendered into `root` to the device object `dev`
-function bindDevice(root, dev, payload, rerender) {
+function pushHelp(dev) {
+  return `<div class="help push"><p>For a device the hub can't reach (Windows, a laptop on another network, a box behind a firewall).
+    You run one command on the device. It scans itself every day and sends the result here, signed with its own token.
+    The hub never logs in to it.</p>
+    <div class="row"><button type="button" class="primary" data-act="token">${dev.paired ? 'Make a new command (the old one stops working)' : 'Make the install command'}</button></div>
+    <div class="pushcmd" aria-live="polite"></div></div>`;
+}
+
+function pushCommands(hub, token) {
+  const sh = `cd ~ && python3 -c "import urllib.request as u; u.urlretrieve('${hub}/push.py', 'dc-push.py')" && python3 dc-push.py install --hub ${hub} --token ${token}`;
+  return [
+    ['Linux', sh, 'Needs python3. Adds a daily systemd timer, or a cron job.'],
+    ['macOS', sh, "Needs Apple's python3 (run xcode-select --install once). Adds a launchd job that keeps the Mac awake while it scans."],
+    ['LibreELEC / Kodi', sh, 'Run it over SSH as root. Turn on cron in LibreELEC Settings → Services so the daily run happens.'],
+    ['NAS', sh, 'Run it over SSH. On Synology, install Python 3 from Package Center first.'],
+    ['Windows', `iwr ${hub}/push.py -OutFile $env:USERPROFILE\\dc-push.py; python $env:USERPROFILE\\dc-push.py install --hub ${hub} --token ${token}`,
+      "Paste it into PowerShell. Needs Python (winget install Python.Python.3.12); if 'python' isn't found, use 'py -3'. Adds a Task Scheduler job."],
+  ];
+}
+
+function showPushCommand(box, dev, hub, token) {
+  const cmds = pushCommands(hub, token);
+  box.innerHTML = `<div class="tabs os" role="tablist">${cmds.map(([os], i) => `<button type="button" data-os="${i}" aria-selected="${i === 0}">${esc(os)}</button>`).join('')}</div>
+    <div class="oscmd"></div>
+    <p class="muted">The token is in the command and is shown only now. Lost it? Make a new command; the old one stops working.</p>
+    <p class="waiting">Waiting for ${esc(dev.name || 'the device')} to report in…</p>`;
+  const pick = (i) => {
+    box.querySelectorAll('[data-os]').forEach((b) => b.setAttribute('aria-selected', String(+b.dataset.os === i)));
+    box.querySelector('.oscmd').innerHTML = copyBox(cmds[i][1]) + `<p class="muted">${esc(cmds[i][2])}</p>`;
+  };
+  box.querySelector('.os').addEventListener('click', (e) => { const b = e.target.closest('[data-os]'); if (b) pick(+b.dataset.os); });
+  pick(/Win/.test(navigator.platform) ? 4 : 0);
+  const since = Date.now() - 5000;
+  const poll = async () => {
+    if (!box.isConnected) return;
+    try {
+      const st = await api('/api/status');
+      const s = (st.devices || {})[dev.id];
+      if (s && Date.parse(String(s.when).replace(/([+-]\d\d)(\d\d)$/, '$1:$2')) > since) {
+        box.querySelector('.waiting').outerHTML = s.ok ? `<p class="ok">✓ ${esc(dev.name)} reported in. It's in the city now.</p>` : `<p class="err">${esc(dev.name)} reported a problem: ${esc(s.msg)}</p>`;
+        dev.paired = true;
+        changed();
+        return;
+      }
+    } catch { /* keep waiting */ }
+    setTimeout(poll, 3000);
+  };
+  setTimeout(poll, 3000);
+}
+
+// wires a deviceForm rendered into `root` to the device object `dev`; persist() saves the config first when needed
+function bindDevice(root, dev, payload, rerender, persist) {
   root.addEventListener('input', (e) => {
     const t = e.target;
     if (t.dataset.f) {
@@ -178,6 +231,7 @@ function bindDevice(root, dev, payload, rerender) {
     const v = e.target.value;
     dev.local = v === 'local' || undefined;
     if (!dev.local) delete dev.local;
+    if (v === 'push') { dev.push = true; delete dev.host; delete dev.user; delete dev.port; } else delete dev.push;
     if (v !== 'cmd') delete dev.password_cmd;
     if (v === 'cmd' && !dev.password_cmd) dev.password_cmd = '';
     rerender();
@@ -189,6 +243,18 @@ function bindDevice(root, dev, payload, rerender) {
     const act = b.dataset.act;
     if (act === 'add-drive') { dev.drives.push({ name: '', path: '' }); return rerender(); }
     if (act === 'drop-drive') { dev.drives.splice(+b.closest('.drive').dataset.i, 1); return rerender(); }
+    if (act === 'token') {
+      if (!dev.name) { out.innerHTML = '<p class="err">Give the device a name first.</p>'; return; }
+      dev.id = dev.id || slug(dev.name);
+      b.disabled = true;
+      try {
+        if (persist) await persist();
+        const r = await api('/api/push/token', { id: dev.id });
+        showPushCommand(root.querySelector('.pushcmd'), dev, r.hub, r.token);
+        out.innerHTML = '';
+      } catch (err) { out.innerHTML = `<p class="err">${esc(err.message)}</p>`; } finally { b.disabled = false; }
+      return;
+    }
     if (act === 'scan') {
       try { await api('/api/scan', { devices: [dev.id] }); out.innerHTML = '<p class="ok">Scanning. The city updates when it finishes.</p>'; watchScan(); } catch (err) { out.innerHTML = `<p class="err">${esc(err.message)}</p>`; }
       return;
@@ -280,22 +346,26 @@ export async function openSettings(me) {
   dlg.showModal();
 }
 
-async function save(dlg) {
+// quiet: a save on the way to something else (making a push token); keeps the
+// objects being edited, and lets the caller see the error
+async function save(dlg, quiet) {
   const note = dlg.querySelector('.note');
   try {
     const cfg = JSON.parse(JSON.stringify(S.cfg));
     for (const d of cfg.devices) {
       d.drives = (d.drives || []).filter((x) => x.name && x.path);
-      if (d.local) { delete d.host; delete d.user; delete d.port; delete d.password_cmd; }
+      if (d.local || d.push) { delete d.host; delete d.user; delete d.port; delete d.password_cmd; }
     }
     S.payload = await api('/api/settings', { config: cfg }, 'PUT');
+    S.dirty = false;
+    if (quiet) return;
     S.cfg = S.payload.config;
     S.cfg.devices.forEach(normalise);
-    S.dirty = false;
     note.textContent = 'Saved.';
     note.className = 'note ok';
     changed();
   } catch (err) {
+    if (quiet) throw err;
     note.textContent = err.message;
     note.className = 'note err';
   }
@@ -317,7 +387,7 @@ function render(dlg) {
     const rerender = () => render(dlg);
     const fresh = body.cloneNode(true);
     body.replaceWith(fresh);
-    bindDevice(fresh, dev, S.payload, rerender);
+    bindDevice(fresh, dev, S.payload, rerender, () => save(dlg, true));
     fresh.querySelector('.back').addEventListener('click', () => { S.editing = null; render(dlg); });
     fresh.querySelector('[data-remove]').addEventListener('click', (e) => {
       if (e.target.dataset.sure) { S.cfg.devices.splice(S.editing, 1); S.editing = null; S.dirty = true; return render(dlg); }
@@ -330,7 +400,7 @@ function render(dlg) {
   if (S.tab === 'devices') {
     S.saved = new Set(S.payload.config.devices.map((d) => d.id));
     html = `<ul class="devlist">${S.cfg.devices.map((d, i) => `<li><button type="button" data-edit="${i}">
-        <b>${esc(d.name)}</b> <span class="muted">${d.local ? 'this machine' : esc((d.user ? d.user + '@' : '') + (d.host || ''))} · ${d.drives.length} drive${d.drives.length === 1 ? '' : 's'}</span></button></li>`).join('')}</ul>
+        <b>${esc(d.name)}</b> <span class="muted">${d.local ? 'this machine' : d.push ? (d.paired ? 'sends its own reports' : 'waiting to be set up') : esc((d.user ? d.user + '@' : '') + (d.host || ''))} · ${d.drives.length} drive${d.drives.length === 1 ? '' : 's'}</span></button></li>`).join('')}</ul>
       <div class="row"><button type="button" data-new>+ Add a device</button><button type="button" class="ghost" data-wizard>Run the setup wizard</button></div>`;
   } else if (S.tab === 'scanning') {
     const cat = scan.categories || {};
@@ -374,7 +444,12 @@ function render(dlg) {
         <label>Header that names the user <input name="header" value="${esc(hub.proxy_user_header || 'Remote-User')}" class="mono"></label>
         <p class="muted">Only requests from those addresses that carry the header get in. Works with Authelia, Authentik, VoidAuth or oauth2-proxy (see docs/security.md).</p></div>
       <div class="row"><button type="button" class="primary" data-sec>Apply</button>${auth === 'password' ? '<button type="button" class="ghost" data-logout>Log out</button>' : ''}</div>
-      <p class="result" aria-live="polite"></p>`;
+      <p class="result" aria-live="polite"></p>
+      <h4>Enrollment tokens</h4>
+      ${S.cfg.devices.filter((d) => d.push && d.paired).map((d) => `<div class="row"><b>${esc(d.name)}</b><span class="muted">sends its own reports</span>
+        <button type="button" class="danger" data-revoke="${esc(d.id)}">Revoke</button></div>`).join('')
+        || '<p class="muted">No device sends its own reports yet.</p>'}
+      <p class="muted">Revoking stops that device's reports right away. Make a new command on its device page to let it back in.</p>`;
   } else if (S.tab === 'backup') {
     html = `<p>Download your config (no admin password inside; password_cmd lines are).</p>
       <div class="row"><a class="button" href="/api/settings/export" download>Export config</a></div>
@@ -437,6 +512,16 @@ function wire(body, dlg) {
         S.me = await api('/api/me');
       } catch (err) { out.textContent = err.message; out.className = 'result err'; }
     }
+    const rv = t.closest('[data-revoke]');
+    if (rv) {
+      try {
+        await api('/api/push/revoke', { id: rv.dataset.revoke });
+        const d = S.cfg.devices.find((x) => x.id === rv.dataset.revoke);
+        if (d) d.paired = false;
+        render(dlg);
+      } catch (err) { out.textContent = err.message; out.className = 'result err'; }
+      return;
+    }
     if (t.closest('[data-logout]')) { await api('/api/logout', {}); location.reload(); }
     if (t.closest('[data-import]')) {
       try {
@@ -484,6 +569,18 @@ export async function openWizard(me) {
     if (W.done) { box.remove(); return changed(); }
   });
 
+  // the wizard's config as it should be saved: finished devices only
+  const finished = () => {
+    const cfg = JSON.parse(JSON.stringify(W.cfg));
+    cfg.devices = cfg.devices.filter((d) => d.name && (d.local || d.host || d.push)).map((d) => {
+      d.id = d.id || slug(d.name);
+      d.drives = d.drives.filter((x) => x.name && x.path);
+      return d;
+    });
+    return cfg;
+  };
+  const persist = () => api('/api/settings', { config: finished() }, 'PUT');
+
   const draw = async () => {
     box.querySelectorAll('.steps li').forEach((li, i) => li.classList.toggle('on', i <= W.step));
     box.querySelector('.bar i').style.width = `${((W.step + 1) / 3) * 100}%`;
@@ -512,7 +609,7 @@ export async function openWizard(me) {
         editor.innerHTML = deviceForm(dev, payload);
         const ed = editor.cloneNode(true);
         editor.replaceWith(ed);
-        bindDevice(ed, dev, payload, () => { draw().then(() => box.querySelector(`[data-open="${i}"]`)?.click()); });
+        bindDevice(ed, dev, payload, () => { draw().then(() => box.querySelector(`[data-open="${i}"]`)?.click()); }, persist);
       };
       fresh.addEventListener('click', (e) => {
         const o = e.target.closest('[data-open]');
@@ -526,12 +623,7 @@ export async function openWizard(me) {
       fresh.innerHTML = '<p>Saving and scanning. Big drives take a few minutes; you can open the city while it works.</p><ul class="progress"></ul>';
       const note = box.querySelector('.note');
       try {
-        const cfg = JSON.parse(JSON.stringify(W.cfg));
-        cfg.devices = cfg.devices.filter((d) => d.name && (d.local || d.host)).map((d) => {
-          d.id = d.id || slug(d.name);
-          d.drives = d.drives.filter((x) => x.name && x.path);
-          return d;
-        });
+        const cfg = finished();
         await api('/api/settings', { config: cfg }, 'PUT');
         await api('/api/scan', {});
         W.done = true;

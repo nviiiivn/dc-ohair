@@ -8,6 +8,7 @@ This guide covers installing the hub, adding your devices, and putting the page 
 - [Option C: By hand](#option-c-by-hand)
 - [Adding devices over SSH](#adding-devices-over-ssh)
 - [Device notes: Mac, LibreELEC, NAS, Windows](#device-notes)
+- [Devices the hub can't reach: the push agent](#devices-the-hub-cant-reach-the-push-agent)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
 - [Updating](#updating)
 - [Troubleshooting](#troubleshooting)
@@ -202,7 +203,25 @@ The scan sees what that user can read. For media folders, a normal user is usual
 
 ### Windows
 
-Not supported yet. The scanner needs a POSIX system. A **push agent** for Windows (a PowerShell one-liner) is on the [roadmap](../README.md#roadmap). Until then, if a Windows disk is also mounted on a Linux machine (dual boot, or a disk in a dock), you can scan it there, read-only.
+Use the push agent (next section). Install Python first (`winget install Python.Python.3.12`), then paste the PowerShell line from Settings. A Windows disk that's also mounted on a Linux machine (dual boot, or a disk in a dock) can be scanned there instead, read-only.
+
+## Devices the hub can't reach: the push agent
+
+Some devices can't be reached over SSH: Windows PCs, a laptop on another network, a box behind a firewall. For those, the device sends its own reports.
+
+1. In **Settings → Devices** (or step 2 of the wizard), add the device and choose **It sends to the hub**.
+2. Press **Make the install command** and pick the device's system: Linux, macOS, LibreELEC / Kodi, NAS, or Windows.
+3. Copy the line and run it **on that device**. It downloads `dc-push.py` from your hub, scans once, and sets up a daily run (a systemd timer, cron, launchd on macOS, or Task Scheduler on Windows).
+4. The page shows *Waiting for the device to report in…* and turns green when the first report arrives.
+
+<p align="center"><img src="media/push.png" width="760" alt="Making the install command for a device that sends its own reports"></p>
+
+Good to know:
+
+- Leave the device's drives empty and it picks its own real drives on the first report. Untick any you don't want afterwards.
+- Each run fetches the hub's current `agent.py`, so the hub and its devices never drift apart.
+- The device needs to reach the hub's address. By default that's this machine's LAN address and port; set `hub.public_url` if devices should use a different one (an HTTPS name behind your proxy, say). If your reverse proxy asks for a login, let `/agent.py`, `/push.py`, `/api/push/spec` and `/api/report` through, because devices authenticate with their own token instead.
+- To stop a device, revoke its token in **Settings → Security**, then on the device run `python3 ~/.dc-ohair/dc-push.py uninstall`.
 
 ### Drives that come and go
 

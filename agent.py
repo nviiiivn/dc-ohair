@@ -13,7 +13,7 @@ Each node is {"n": name, "c": [music, games, series, movies, other], "f": files,
 "m": newest mtime, "k": [children]}; files get "t": "f", and everything below
 the size cutoff is folded into one child per folder with "x": 1.
 """
-import base64, fnmatch, json, os, re, socket, stat, subprocess, sys, time
+import base64, fnmatch, json, os, re, shutil, socket, stat, subprocess, sys, time
 
 DEFAULT_CATEGORIES = {
     'music': ['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.alac', '.aiff', '.aif', '.wma', '.ape', '.dsf'],
@@ -85,6 +85,8 @@ def root_source(root):
 def other_fs(path, st, dev, src):
     # btrfs subvolumes each get their own st_dev, so on Linux only a mount
     # point backed by a different source counts as another filesystem
+    if os.name == 'nt':
+        return False  # scandir reports st_dev as 0 on Windows; each drive letter is scanned on its own
     if MOUNTS is None:
         return st.st_dev != dev
     return path in MOUNTS and MOUNTS[path][0] != src
@@ -103,7 +105,8 @@ def scan(path, name, dev, src, exclude, depth):
     loose = [0] * 5
     loose_n = 0
     loose_m = 0
-    dir_games = bool(GAMES.search(path.lower() + '/'))
+    slashed = path.replace('\\', '/')
+    dir_games = bool(GAMES.search(slashed.lower() + '/'))
     try:
         it = os.scandir(path)
     except OSError:
@@ -133,7 +136,7 @@ def scan(path, name, dev, src, exclude, depth):
                         continue
                     seen.add(k)
                 size = getattr(st, 'st_blocks', 0) * 512 or st.st_size
-                ci = classify(path, dir_games, e.name, st.st_size)
+                ci = classify(slashed, dir_games, e.name, st.st_size)
                 cats[ci] += size
                 nfiles += 1
                 mtime = int(st.st_mtime)
@@ -168,6 +171,12 @@ def scan(path, name, dev, src, exclude, depth):
 
 
 def fs_usage(path):
+    if not hasattr(os, 'statvfs'):  # Windows
+        try:
+            du = shutil.disk_usage(path)
+        except OSError:
+            return None
+        return {'total': du.total, 'free': du.free, 'used': du.used}
     try:
         v = os.statvfs(path)
     except OSError:
@@ -187,7 +196,11 @@ SYSTEM_PREFIXES = ('/boot', '/snap', '/var/lib/docker', '/var/lib/containers', '
 def list_mounts():
     """Real filesystems worth scanning, one per device (btrfs subvolumes collapse)."""
     found = []
-    if MOUNTS is not None:
+    if os.name == 'nt':
+        for letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+            if os.path.exists(letter + ':\\'):
+                found.append((letter + ':\\', letter + ':', 'ntfs', False))
+    elif MOUNTS is not None:
         for mp, (source, fstype, ro) in MOUNTS.items():
             found.append((mp, source, fstype, ro))
     else:
