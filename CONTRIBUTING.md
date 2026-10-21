@@ -1,4 +1,4 @@
-# Contributing to D.C. O'HAIR
+# Contributing to Disk City
 
 Thanks for helping. Bug reports, ideas and pull requests are all welcome.
 

@@ -28,6 +28,6 @@ Anything that would let someone:
 
 Only the latest release gets security fixes.
 
-## How D.C. O'HAIR is built to be safe
+## How Disk City is built to be safe
 
 See [docs/security.md](docs/security.md): read-only scanning, no stored passwords, a restricted SSH key line, the login options, and a checklist.

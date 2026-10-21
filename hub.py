@@ -1,4 +1,4 @@
-"""D.C. O'HAIR hub: serves the 3D city and the JSON API, runs scheduled scans,
+"""Disk City hub: serves the 3D city and the JSON API, runs scheduled scans,
 and hosts the settings page and first-run wizard.
 
     python3 hub.py              # reads devices.yml, listens on hub.port (7171)
@@ -500,7 +500,7 @@ class Hub:
             return
         lines = [a['msg'] for a in new] + ['Back to normal: %s' % k.split(':', 1)[1].replace('/', ' / ') for k in gone]
         level = 'critical' if any(a['level'] == 'critical' for a in new) else 'warning'
-        subject = "D.C. O'HAIR: " + (lines[0] if len(lines) == 1 else '%d changes to your drives' % len(lines))
+        subject = "Disk City: " + (lines[0] if len(lines) == 1 else '%d changes to your drives' % len(lines))
         results = notifier.send_all(chans, subject, '\n'.join(lines), level, new)
         collect.save(os.path.join(DATA, 'notify.json'), {'when': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'results': results})
 
@@ -641,7 +641,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(self.settings_payload())
         if path == '/api/settings/export':
             import yaml
-            text = "# D.C. O'HAIR config export\n" + yaml.safe_dump(self.hub.public_config(), sort_keys=False, allow_unicode=True)
+            text = "# Disk City config export\n" + yaml.safe_dump(self.hub.public_config(), sort_keys=False, allow_unicode=True)
             self.extra_headers.append(('Content-Disposition', 'attachment; filename="dc-ohair-config.yml"'))
             return self.send_bytes(text.encode(), 'application/yaml')
         return self.send_error(404)
@@ -757,7 +757,7 @@ class Handler(SimpleHTTPRequestHandler):
             if hub.auth == 'off' and not self.is_local() and changed_commands(hub.cfg, {'hub': {'notify': [ch]}}):
                 return self.send_json({'type': ch.get('type'), 'ok': False, 'error': 'Save this channel first: with no login on, '
                                        'commands can only be added from a browser on the hub, or in the config file.'})
-            results = notifier.send_all([ch], "D.C. O'HAIR test", 'This is a test from your disk city. If you can read it, alerts will reach you here.')
+            results = notifier.send_all([ch], "Disk City test", 'This is a test from your disk city. If you can read it, alerts will reach you here.')
             return self.send_json(results[0])
         if path in ('/api/push/token', '/api/push/revoke'):
             dev_id = data.get('id', '')
@@ -822,7 +822,7 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError('The provider said: %s' % (q.get('error_description') or q['error']))
             who, nxt = oidc.finish(cfg, q.get('state'), q.get('code', ''))
         except (OSError, ValueError, KeyError) as e:
-            page = ('<!doctype html><meta charset="utf-8"><title>D.C. O\'HAIR</title><body style="font:16px system-ui;padding:2em">'
+            page = ('<!doctype html><meta charset="utf-8"><title>Disk City</title><body style="font:16px system-ui;padding:2em">'
                     '<h2>Couldn\'t sign you in</h2><p>%s</p><p><a href="/auth/login">Try again</a></p>' % html_escape(str(e)))
             return self.send_bytes(page.encode(), 'text/html; charset=utf-8', 403)
         self.set_session(hub.sessions.new(), SESSION_DAYS * 86400)
@@ -938,7 +938,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="D.C. O'HAIR hub")
+    ap = argparse.ArgumentParser(description="Disk City hub")
     ap.add_argument('--demo', action='store_true', help='serve made-up devices instead of your config')
     ap.add_argument('--config', help='path to devices.yml (default: $DC_CONFIG or ./devices.yml)')
     ap.add_argument('--port', type=int, help='override hub.port')
@@ -973,7 +973,7 @@ def main():
     if not args.demo and not args.no_schedule:
         threading.Thread(target=hub.scheduler, daemon=True).start()
     Handler.hub = hub
-    print("D.C. O'HAIR %s on http://%s:%d%s" % (VERSION, bind, port, ' (demo)' if args.demo else ''), flush=True)
+    print("Disk City %s on http://%s:%d%s" % (VERSION, bind, port, ' (demo)' if args.demo else ''), flush=True)
     ThreadingHTTPServer((bind, port), Handler).serve_forever()
 
 

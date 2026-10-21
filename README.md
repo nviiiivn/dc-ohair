@@ -1,13 +1,13 @@
-<p align="center"><img src="web/logo.svg" width="96" alt="D.C. O'HAIR logo"></p>
+<p align="center"><img src="web/logo.svg" width="96" alt="Disk City logo"></p>
 
-<h1 align="center">D.C. O'HAIR</h1>
-<p align="center"><i>Data City Over Here Am I Right?</i></p>
+<h1 align="center">Disk City</h1>
+<p align="center"><i>a.k.a. D.C. O'HAIR: Data City Over Here Am I Right?</i></p>
 
 <p align="center"><sub><i>"It's a UNIX system! I know this!"</i></sub></p>
 
 <p align="center"><b>A usable, good, easy, network-wide, large-scale, fsv-style, lovable disk city.</b></p>
 
-D.C. O'HAIR turns the drives on all your computers into one 3D city you can fly through.
+Disk City turns the drives on all your computers into one 3D city you can fly through.
 
 Each device is a district, each drive is a block, and each big file or folder is a building. The buildings are colored by what's inside: Music, Games, Series, Movies and Other. Next to the city is a plain table of every drive: Used, Free, Total, and how much of each category it holds.
 
@@ -129,7 +129,7 @@ Press **Find devices on my network** to have the hub knock on the SSH and file-s
 Then let the hub in. The hub has **its own SSH key**, and the wizard shows two ways to add it to the device:
 
 1. **Easiest:** run the `ssh-copy-id` line it shows you **on the hub**. It asks for the device's password once.
-2. **Tighter:** run the `authorized_keys` line it shows you **on the device**. The key it adds can only run D.C. O'HAIR's read-only scanner and nothing else. It gets no shell, no port forwarding and no terminal.
+2. **Tighter:** run the `authorized_keys` line it shows you **on the device**. The key it adds can only run Disk City's read-only scanner and nothing else. It gets no shell, no port forwarding and no terminal.
 
 Press **Find drives** to list the device's drives, and **Test connection** to check everything. If something's wrong, the message tells you what to do in plain words. For example: "The device turned the hub's key away. Add the hub's key to the device…" or "python3 isn't installed on nas.local…".
 
@@ -377,7 +377,7 @@ Bug reports and pull requests are welcome. See **[CONTRIBUTING.md](CONTRIBUTING.
 
 ## License
 
-D.C. O'HAIR is released under the **[PolyForm Noncommercial License 1.0.0](LICENSE)**. In short, anyone can use it, change it and share it, but nobody can make money off it. See the license for the exact terms.
+Disk City is released under the **[PolyForm Noncommercial License 1.0.0](LICENSE)**. In short, anyone can use it, change it and share it, but nobody can make money off it. See the license for the exact terms.
 
 It bundles **[three.js](https://threejs.org/)** (MIT License), in `web/vendor/three/` with its own LICENSE file.
 

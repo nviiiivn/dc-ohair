@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# D.C. O'HAIR bare-metal installer.
+# Disk City bare-metal installer.
 #
 # Read this before you run it. It:
 #   1. checks for python3 and ssh,
@@ -77,7 +77,7 @@ pick_many() {  # pick_many "question" option... -> chosen options, one per line 
 
 # ---------- 1. what we need ----------
 
-title "D.C. O'HAIR" "Data City Over Here Am I Right?" "This sets up the hub on this machine."
+title "Disk City" "Every drive you own, as one city." "This sets up the hub on this machine."
 command -v python3 >/dev/null || { echo "python3 is missing. Install it first (apt install python3 python3-venv)."; exit 1; }
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))' || { echo "The hub needs python3 3.8 or newer."; exit 1; }
 python3 -c 'import venv' 2>/dev/null || { echo "python3's venv module is missing (apt install python3-venv)."; exit 1; }
@@ -104,7 +104,7 @@ if [[ -f "$HERE/hub.py" && -f "$HERE/agent.py" ]]; then
     "$HERE/requirements.txt" "$HERE/web" "$HERE/systemd" "$HERE/devices.example.yml" "$APP/"
 else
   command -v git >/dev/null || { echo "Run this from a copy of the repo, or install git so it can fetch one."; exit 1; }
-  say "Fetching D.C. O'HAIR from $REPO_URL"
+  say "Fetching Disk City from $REPO_URL"
   git clone --depth 1 "$REPO_URL" "$APP/src"
   cp -R "$APP/src/." "$APP/"
 fi

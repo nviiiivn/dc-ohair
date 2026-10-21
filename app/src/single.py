@@ -231,7 +231,7 @@ class Single:
         agent.spec = {'drives': [{'name': 'Phone storage' if r == main else 'Card ' + r.rsplit('/', 1)[-1], 'path': r}
                                  for r in roots if os.access(r, os.R_OK)]}
         if not agent.spec['drives']:
-            raise ScanError("The app can't read the phone's storage yet. Allow All files access for D.C. O'HAIR in Android's settings.")
+            raise ScanError("The app can't read the phone's storage yet. Allow All files access for Disk City in Android's settings.")
         agent.seen.clear()
         buf = io.StringIO()
         try:

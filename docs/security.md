@@ -1,6 +1,6 @@
 # Security
 
-D.C. O'HAIR logs in to your machines and lists their files, so it should be careful. Here's what it does, what it never does, and how to lock it down.
+Disk City logs in to your machines and lists their files, so it should be careful. Here's what it does, what it never does, and how to lock it down.
 
 - [What it touches](#what-it-touches)
 - [No stored passwords](#no-stored-passwords)
@@ -65,7 +65,7 @@ You can add that key to a device in two ways (Settings shows both, ready to copy
 command="python3 -c \"…\" $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… dc-ohair@hub
 ```
 
-The forced command reads the script the hub sends, checks its **sha256** against the exact `agent.py` your hub had when it made the line, and runs it only if it matches. So even if someone stole the hub's key, it would only run D.C. O'HAIR's read-only scanner on that device: no shell, no terminal, no tunnels. After you update D.C. O'HAIR, replace the line with the new one from Settings.
+The forced command reads the script the hub sends, checks its **sha256** against the exact `agent.py` your hub had when it made the line, and runs it only if it matches. So even if someone stole the hub's key, it would only run Disk City's read-only scanner on that device: no shell, no terminal, no tunnels. After you update Disk City, replace the line with the new one from Settings.
 
 **Use the least access that works.** Scan as a normal user who can read your media folders, rather than root. Anything that user can't read shows up as "Not seen by the scan", and the totals still come from the drive itself. Use root only on appliances where root is the only user, like LibreELEC.
 

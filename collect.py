@@ -1,4 +1,4 @@
-"""D.C. O'HAIR collector: runs agent.py on each device and saves the results.
+"""Disk City collector: runs agent.py on each device and saves the results.
 
 Read-only on every device: the agent only lists and stats files. Remote
 devices are reached over ssh with keys (the hub's own key in ~/.config/dc-ohair/ssh, plus
@@ -93,7 +93,7 @@ def save_config(cfg, path=None):
     tmp = path + '.tmp'
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as f:
-        f.write("# D.C. O'HAIR config. Edited by the settings page; keep it out of git.\n")
+        f.write("# Disk City config. Edited by the settings page; keep it out of git.\n")
         yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True, default_flow_style=False)
     if os.path.exists(path):
         os.replace(path, path + '.bak')

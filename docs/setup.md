@@ -1,4 +1,4 @@
-# Setting up D.C. O'HAIR
+# Setting up Disk City
 
 This guide covers installing the hub, adding your devices, and putting the page behind a login or a reverse proxy.
 
@@ -107,7 +107,7 @@ A systemd unit, for example at `/etc/systemd/system/dc-ohair.service`:
 
 ```ini
 [Unit]
-Description=D.C. O'HAIR hub
+Description=Disk City hub
 After=network-online.target
 Wants=network-online.target
 
@@ -176,7 +176,7 @@ ssh-copy-id -i ~/.config/dc-ohair/ssh/id_ed25519.pub admin@nas.local
 command="python3 -c \"…only runs the agent whose sha256 matches…\" $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… dc-ohair@hub
 ```
 
-With that line, the hub's key can **only** run D.C. O'HAIR's read-only scanner: no shell, no terminal, no port forwarding. The check is tied to the exact `agent.py`, so after you update D.C. O'HAIR, copy the new line from Settings and replace the old one.
+With that line, the hub's key can **only** run Disk City's read-only scanner: no shell, no terminal, no port forwarding. The check is tied to the exact `agent.py`, so after you update Disk City, copy the new line from Settings and replace the old one.
 
 **Keys you already have** work too. The hub's user also uses its normal `~/.ssh` keys and ssh-agent.
 

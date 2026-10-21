@@ -1,4 +1,4 @@
-# The D.C. O'HAIR phone and tablet app, built with Flet.
+# The Disk City phone and tablet app, built with Flet.
 #   python sync.py            # copy the hub's shared Python into src/shared
 #   flet run src/main.py      # try it on this computer
 #   flet build apk            # Android (see README.md for iOS)
@@ -9,15 +9,15 @@
 [project]
 name = "dc-ohair"
 version = "0.1.0"
-description = "Your D.C. O'HAIR disk city, on your phone"
+description = "Your Disk City disk city, on your phone"
 requires-python = ">=3.10"
 
 [tool.flet]
-product = "D.C. O'HAIR"
+product = "Disk City"
 org = "io.github.nviiiivn"
 bundle_id = "io.github.nviiiivn.dcohair"
-company = "D.C. O'HAIR contributors"
-copyright = "Copyright 2026 the D.C. O'HAIR contributors"
+company = "Disk City contributors"
+copyright = "Copyright 2026 the Disk City contributors"
 
 [tool.flet.app]
 path = "src"
@@ -36,4 +36,4 @@ usesCleartextTraffic = "true"
 
 [tool.flet.ios.info]
 NSAppTransportSecurity = { NSAllowsLocalNetworking = true }
-NSLocalNetworkUsageDescription = "D.C. O'HAIR talks to your hub and computers on your home network."
+NSLocalNetworkUsageDescription = "Disk City talks to your hub and computers on your home network."

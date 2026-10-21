@@ -1,6 +1,6 @@
 # Configuration reference
 
-D.C. O'HAIR keeps its settings in one YAML file, `devices.yml`. Git ignores it, because it holds your hosts and users.
+Disk City keeps its settings in one YAML file, `devices.yml`. Git ignores it, because it holds your hosts and users.
 
 You rarely need to edit it by hand: the setup wizard and **Settings** write it for you. When the page saves it, the file is rewritten (so comments are lost), the previous version is kept as `devices.yml.bak`, and the file is made readable only by its owner.
 

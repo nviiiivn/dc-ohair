@@ -1,12 +1,15 @@
 # Changelog
 
-All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic versioning](https://semver.org/).
+All notable changes to Disk City are listed here. Versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
 ### Added
 - **Phone and tablet app** (`app/`, built with Flet): Drives, Browse with a tappable treemap, the 3D City, Search and Alerts, on your hub's JSON API.
 - **No hub needed**: the app can scan one computer over SSH (its own key, or a password typed for that scan only) or, on Android, the phone itself, with the same read-only scanner. The 3D City tab works there too: the app serves the page itself, to its own WebView only.
+
+### Changed
+- The everyday name is now **Disk City**. D.C. O'HAIR (Data City Over Here Am I Right?) stays as its long-form name.
 
 ### Fixed
 - The Games rule `/emulat` no longer matches Android's `/storage/emulated/`, so a phone's files aren't all counted as Games. The scanner changed, so if you use a restricted `authorized_keys` line, replace it with the new one from Settings.

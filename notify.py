@@ -14,7 +14,7 @@ prints it at send time, so it never has to sit in the config file.
 import json, smtplib, ssl, subprocess, urllib.request
 from email.message import EmailMessage
 
-TITLE = "D.C. O'HAIR"
+TITLE = "Disk City"
 
 
 def _secret(ch, key):

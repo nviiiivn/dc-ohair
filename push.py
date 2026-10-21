@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""D.C. O'HAIR push agent: for devices the hub can't reach over ssh.
+"""Disk City push agent: for devices the hub can't reach over ssh.
 
 The device runs this on a schedule. Each run it asks the hub what to scan,
 runs agent.py (read-only), and sends the result back, signed with the
@@ -94,9 +94,9 @@ def schedule_install(at):
         unit = os.path.expanduser('~/.config/systemd/user/')
         os.makedirs(unit, exist_ok=True)
         with open(unit + LABEL + '.service', 'w') as f:
-            f.write('[Unit]\nDescription=D.C. O\'HAIR push agent\n\n[Service]\nType=oneshot\nExecStart=%s %s run\n' % (py, SELF))
+            f.write('[Unit]\nDescription=Disk City push agent\n\n[Service]\nType=oneshot\nExecStart=%s %s run\n' % (py, SELF))
         with open(unit + LABEL + '.timer', 'w') as f:
-            f.write('[Unit]\nDescription=D.C. O\'HAIR daily push\n\n[Timer]\nOnCalendar=*-*-* %02d:%02d:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' % (h, m))
+            f.write('[Unit]\nDescription=Disk City daily push\n\n[Timer]\nOnCalendar=*-*-* %02d:%02d:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' % (h, m))
         subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
         subprocess.run(['systemctl', '--user', 'enable', '--now', LABEL + '.timer'], check=True)
         return 'a systemd user timer (run "loginctl enable-linger" so it also runs while you are logged out)'
@@ -151,7 +151,7 @@ def install(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="D.C. O'HAIR push agent")
+    ap = argparse.ArgumentParser(description="Disk City push agent")
     sub = ap.add_subparsers(dest='cmd')
     i = sub.add_parser('install')
     i.add_argument('--hub', required=True)

@@ -1,4 +1,4 @@
-# D.C. O'HAIR hub. See docs/setup.md.
+# Disk City hub. See docs/setup.md.
 FROM python:3.12-slim
 
 RUN apt-get update \

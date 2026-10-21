@@ -1,6 +1,6 @@
 # Bare-metal unit. install.sh fills in the paths and user; see docs/setup.md.
 [Unit]
-Description=D.C. O'HAIR hub
+Description=Disk City hub
 After=network-online.target
 Wants=network-online.target
 

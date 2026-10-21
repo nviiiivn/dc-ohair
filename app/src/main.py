@@ -1,6 +1,6 @@
-"""D.C. O'HAIR for phones and tablets.
+"""Disk City for phones and tablets.
 
-Connects to a D.C. O'HAIR hub (or shows a made-up home network) and lets you
+Connects to a Disk City hub (or shows a made-up home network) and lets you
 look through every drive as lists you tap into: drives with what fills them,
 folders sorted by size, the biggest files below anywhere, search, and alerts.
 """
@@ -71,7 +71,7 @@ class App:
         self.t = themes.apply(self.page, self.theme)
         cats = await self.pref('cats')
         self.flt = model.Filter([c == '1' for c in cats] if isinstance(cats, list) else None)
-        self.page.title = "D.C. O'HAIR"
+        self.page.title = "Disk City"
         try:
             folder = await ft.StoragePaths().get_application_support_directory()
         except Exception:  # not available in web mode, or the service is slow
@@ -122,10 +122,10 @@ class App:
         self.page.appbar = None
         self.page.navigation_bar = None
         self.screen(ft.SafeArea(ft.Container(ft.Column([
-            ft.Text("D.C. O'HAIR", size=30, weight=ft.FontWeight.BOLD, color=t['accent']),
-            ft.Text('Data City Over Here Am I Right?', italic=True, color=t['text2']),
+            ft.Text("Disk City", size=30, weight=ft.FontWeight.BOLD, color=t['accent']),
+            ft.Text("a.k.a. D.C. O'HAIR: Data City Over Here Am I Right?", italic=True, color=t['text2']),
             ft.Container(height=24),
-            ft.Text('Connect to your hub: the machine that runs D.C. O\'HAIR on your network.', color=t['text']),
+            ft.Text('Connect to your hub: the machine that runs Disk City on your network.', color=t['text']),
             url, msg,
             ft.FilledButton('Connect', icon=ft.Icons.LINK, on_click=connect),
             ft.Container(height=8),
@@ -252,7 +252,7 @@ class App:
             handler = fph.PermissionHandler()
             status = await handler.request(fph.Permission.MANAGE_EXTERNAL_STORAGE)
             if status != fph.PermissionStatus.GRANTED:
-                ok = await self.ask('Allow All files access', 'To measure what fills this phone, D.C. O\'HAIR needs to read all its files '
+                ok = await self.ask('Allow All files access', 'To measure what fills this phone, Disk City needs to read all its files '
                                     '(it never changes or sends any of them). Turn on "All files access" for it in the next screen.', 'Open settings')
                 if ok:
                     await handler.open_app_settings()
@@ -287,7 +287,7 @@ class App:
                             'turn on the admin login in Settings → Security, or use the web page.' % (
                                 'your reverse proxy' if me.get('auth') == 'proxy' else me.get('login_name') or 'OIDC'), color=t['text'])]
         self.screen(ft.SafeArea(ft.Container(ft.Column([
-            ft.Text("D.C. O'HAIR", size=28, weight=ft.FontWeight.BOLD, color=t['accent']), *body,
+            ft.Text("Disk City", size=28, weight=ft.FontWeight.BOLD, color=t['accent']), *body,
             ft.TextButton('Use a different hub', on_click=lambda e: self.show_connect()),
         ], spacing=12, tight=True), padding=24)))
 
@@ -341,7 +341,7 @@ class App:
         t = self.t
         alerts = self.city.get('alerts') or []
         self.page.appbar = ft.AppBar(
-            title=ft.Text("D.C. O'HAIR", weight=ft.FontWeight.BOLD, color=t['accent']), bgcolor=t['bg2'],
+            title=ft.Text("Disk City", weight=ft.FontWeight.BOLD, color=t['accent']), bgcolor=t['bg2'],
             actions=[ft.IconButton(ft.Icons.REFRESH, tooltip='Reload', on_click=self.reload),
                      ft.IconButton(ft.Icons.SETTINGS, tooltip='Settings', on_click=self.open_settings)])
         self.page.navigation_bar = ft.NavigationBar(

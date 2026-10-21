@@ -1,4 +1,4 @@
-// D.C. O'HAIR front end: the drives from /api/city drawn as a 3D city.
+// Disk City front end: the drives from /api/city drawn as a 3D city.
 //   City   - nested treemap; folders are raised blocks, files are towers
 //            stacked by category.
 //   Circle - fsv's TreeV idea: rings of platforms around the current folder.

@@ -1,4 +1,4 @@
-# D.C. O'HAIR config example. Copy to devices.yml (which git ignores) and edit,
+# Disk City config example. Copy to devices.yml (which git ignores) and edit,
 # or skip this file entirely: with no config the web page runs a setup wizard.
 # Every option is explained in docs/configuration.md.
 

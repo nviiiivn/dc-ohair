@@ -1,4 +1,4 @@
-"""Talks to a D.C. O'HAIR hub's JSON API, or stands in for one with demo data."""
+"""Talks to a Disk City hub's JSON API, or stands in for one with demo data."""
 import gzip, json, time, urllib.error, urllib.parse, urllib.request
 
 

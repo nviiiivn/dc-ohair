@@ -1,4 +1,4 @@
-# D.C. O'HAIR: docker compose up -d, then open http://<this machine>:7171
+# Disk City: docker compose up -d, then open http://<this machine>:7171
 services:
   dc-ohair:
     build: .

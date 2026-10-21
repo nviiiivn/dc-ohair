@@ -1,4 +1,4 @@
-"""D.C. O'HAIR agent: walks drive roots read-only and prints one JSON document.
+"""Disk City agent: walks drive roots read-only and prints one JSON document.
 
 Runs on any device with python3 (3.6+); nothing to install:
     ssh host python3 - <base64 spec> < agent.py

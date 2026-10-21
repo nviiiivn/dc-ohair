@@ -1,4 +1,4 @@
-// D.C. O'HAIR settings page, login screen and first-run wizard.
+// Disk City settings page, login screen and first-run wizard.
 // Everything here talks to the hub's JSON API; app.js listens for the
 // "dc:changed" event and reloads the city after a save or a scan.
 
@@ -49,7 +49,7 @@ export function showLogin(me) {
   if (me.auth === 'oidc') {
     const next = encodeURIComponent(location.pathname + location.search);
     const sso = el(`<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><div class="sheet small">
-      <img src="/logo.svg" alt="" width="56" height="56"><h2 id="loginTitle">D.C. O'HAIR</h2>
+      <img src="/logo.svg" alt="" width="56" height="56"><h2 id="loginTitle">Disk City</h2>
       <p class="muted">Sign in to see your drives.</p>
       <a class="primary button" href="/auth/login?next=${next}">Sign in with ${esc(me.login_name)}</a></div></div>`);
     document.body.append(sso);
@@ -58,7 +58,7 @@ export function showLogin(me) {
   const box = el(`<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
     <form class="sheet small">
       <img src="/logo.svg" alt="" width="56" height="56">
-      <h2 id="loginTitle">D.C. O'HAIR</h2>
+      <h2 id="loginTitle">Disk City</h2>
       <p class="muted">${me.password_set ? 'Log in to see your drives.' : 'Login is on, but no password is set yet. Set one with: python3 hub.py --set-password'}</p>
       ${me.password_set ? '<label>Password <input type="password" name="pw" autocomplete="current-password" required></label><p class="err" role="alert"></p><button class="primary" type="submit">Log in</button>' : ''}
     </form></div>`);
@@ -119,8 +119,8 @@ function keyHelp(dev, payload) {
   const onDevice = `mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys <<'EOF'\n${payload.restricted_line}\nEOF\nchmod 600 ~/.ssh/authorized_keys`;
   return `<details class="help" open><summary>Let the hub in with its own key</summary>
     <p>Easiest: run this <b>on the hub</b>. It asks for ${esc(target)}'s password once.</p>${copyBox(hubCmd)}
-    <p>Tighter: run this <b>on ${esc(dev.name || 'the device')}</b>. The key it adds can only run D.C. O'HAIR's read-only scanner, nothing else.</p>${copyBox(onDevice)}
-    <p class="muted">LibreELEC keeps root's keys in /storage/.ssh. After an update to D.C. O'HAIR, the tighter line needs replacing.</p></details>`;
+    <p>Tighter: run this <b>on ${esc(dev.name || 'the device')}</b>. The key it adds can only run Disk City's read-only scanner, nothing else.</p>${copyBox(onDevice)}
+    <p class="muted">LibreELEC keeps root's keys in /storage/.ssh. After an update to Disk City, the tighter line needs replacing.</p></details>`;
 }
 
 function deviceForm(dev, payload, opts = {}) {
@@ -476,7 +476,7 @@ function voidauthText(dc, auth, how) {
       ['1. Add to the voidauth service in its compose.yml (environment:), then docker compose up -d', `OIDC_dcohair_CLIENT_SECRET: "${secret}"
 OIDC_dcohair_CLIENT_REDIRECT_URLS: "${dc}/auth/callback"
 OIDC_dcohair_CLIENT_AUTH_METHOD: "client_secret_post"
-OIDC_dcohair_CLIENT_DISPLAY_NAME: "D.C. O'HAIR"`],
+OIDC_dcohair_CLIENT_DISPLAY_NAME: "Disk City"`],
       ["2. Give the same secret to the hub (systemd: Environment= line; Docker: environment:), then restart it", `DC_OIDC_SECRET=${secret}`],
       ['3. Then fill in above: Issuer, Client ID and the variable, and press Apply', `Issuer: ${auth}/oidc
 Client ID: dcohair
@@ -608,7 +608,7 @@ function render(dlg) {
         <label>Header that names the user <input name="header" value="${esc(hub.proxy_user_header || 'Remote-User')}" class="mono"></label>
         <p class="muted">Only requests from those addresses that carry the header get in. Works with Authelia, Authentik, VoidAuth or oauth2-proxy (see docs/security.md).</p></div>
       <div class="sec-oidc" ${auth === 'oidc' ? '' : 'hidden'}>
-        <p class="muted">Sign in through your own login service: VoidAuth, Authelia, Authentik, Keycloak, Google and the like. Register D.C. O'HAIR there with this redirect URL:</p>
+        <p class="muted">Sign in through your own login service: VoidAuth, Authelia, Authentik, Keycloak, Google and the like. Register Disk City there with this redirect URL:</p>
         ${copyBox(location.origin + '/auth/callback')}
         <div class="grid2">
           <label>Issuer <input name="o_issuer" value="${esc((hub.oidc || {}).issuer || '')}" placeholder="https://auth.example.com/oidc" class="mono"></label>
@@ -804,7 +804,7 @@ export async function openWizard(me) {
   if (!here) { here = { id: 'this-machine', name: 'This machine', local: true, drives: [] }; W.cfg.devices.unshift(here); }
   const box = el(`<div class="overlay wizard" role="dialog" aria-modal="true" aria-labelledby="wizTitle">
     <div class="sheet">
-      <header><img src="/logo.svg" alt="" width="40" height="40"><div><h2 id="wizTitle">Welcome to D.C. O'HAIR</h2>
+      <header><img src="/logo.svg" alt="" width="40" height="40"><div><h2 id="wizTitle">Welcome to Disk City</h2>
         <p class="muted">Three steps and your drives become a city.</p></div>
         <button type="button" class="ghost skip">Skip setup</button></header>
       <ol class="steps"><li>This machine</li><li>Your other devices</li><li>First scan</li></ol>

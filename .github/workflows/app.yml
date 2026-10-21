@@ -44,7 +44,7 @@ jobs:
           flet build ${{ matrix.target }} --yes --verbose --build-number "$GITHUB_RUN_NUMBER" "${version[@]}"
       - name: name the files
         run: |
-          name="dc-ohair-${TAG:-build-$GITHUB_RUN_NUMBER}"
+          name="disk-city-${TAG:-build-$GITHUB_RUN_NUMBER}"
           mkdir dist
           if [ "${{ matrix.target }}" = apk ]; then
             cp "$(ls app/build/apk/*.apk | head -1)" "dist/$name.apk"
