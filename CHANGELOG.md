@@ -4,8 +4,12 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 
 ## [Unreleased]
 
-### Planned
-- Phone apps on the same JSON API.
+### Added
+- **Phone and tablet app** (`app/`, built with Flet): Drives, Browse with a tappable treemap, the 3D City, Search and Alerts, on your hub's JSON API.
+- **No hub needed**: the app can scan one computer over SSH (its own key, or a password typed for that scan only) or, on Android, the phone itself, with the same read-only scanner.
+
+### Fixed
+- The Games rule `/emulat` no longer matches Android's `/storage/emulated/`, so a phone's files aren't all counted as Games. The scanner changed, so if you use a restricted `authorized_keys` line, replace it with the new one from Settings.
 
 ## [0.7.0] - sign in with OIDC, and a VoidAuth helper
 

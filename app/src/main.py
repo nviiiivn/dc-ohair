@@ -4,13 +4,14 @@ Connects to a D.C. O'HAIR hub (or shows a made-up home network) and lets you
 look through every drive as lists you tap into: drives with what fills them,
 folders sorted by size, the biggest files below anywhere, search, and alerts.
 """
-import asyncio, datetime, functools, os
+import asyncio, datetime, functools, json, os
 
 import flet as ft
 import flet.canvas as cv
 
 import model
 import themes
+import single
 from hubclient import Demo, Hub, HubError
 
 ICONS = {'device': ft.Icons.DEVICES, 'drive': ft.Icons.STORAGE, 'dir': ft.Icons.FOLDER, 'file': ft.Icons.INSERT_DRIVE_FILE,
@@ -70,9 +71,19 @@ class App:
         cats = await self.pref('cats')
         self.flt = model.Filter([c == '1' for c in cats] if isinstance(cats, list) else None)
         self.page.title = "D.C. O'HAIR"
+        try:
+            folder = await ft.StoragePaths().get_application_support_directory()
+        except Exception:  # not available in web mode, or the service is slow
+            folder = None
+        self.store = single.Store(os.path.join(folder or os.path.expanduser('~'), 'dc-ohair-app'))
         url = await self.pref('hub_url')
         if url == 'demo':
             self.hub = Demo()
+        elif url == 'single':
+            try:
+                self.hub = single.Single(self.store, json.loads(await self.pref('single', '{}')))
+            except ValueError:
+                self.hub = None
         elif url:
             self.hub = Hub(url, await self.pref('session', ''))
         if self.hub:
@@ -117,8 +128,141 @@ class App:
             url, msg,
             ft.FilledButton('Connect', icon=ft.Icons.LINK, on_click=connect),
             ft.Container(height=8),
+            ft.Text('No hub? The app can scan by itself:', color=t['text2']),
+            ft.OutlinedButton('Scan one computer over SSH', icon=ft.Icons.TERMINAL, on_click=lambda e: self.show_ssh_setup()),
+            *([ft.OutlinedButton('Scan this phone', icon=ft.Icons.PHONE_ANDROID, on_click=self.scan_phone)]
+              if self.page.platform == ft.PagePlatform.ANDROID else []),
             ft.TextButton('Look around a made-up home network first', icon=ft.Icons.TRAVEL_EXPLORE, on_click=demo),
-        ], spacing=12, tight=True), padding=24, expand=True)))
+        ], spacing=12, tight=True, scroll=ft.ScrollMode.AUTO), padding=24, expand=True)))
+
+    # ---------- single-device mode ----------
+
+    def show_ssh_setup(self, cfg=None, error=''):
+        t = self.t
+        cfg = dict(cfg or {})
+        field = lambda label, key, hint='', **kw: ft.TextField(label=label, value=str(cfg.get(key) or ''), hint_text=hint, **kw)
+        name = field('Name', 'name', 'Living room PC')
+        host = field('Host', 'host', '192.168.1.20 or pc.local', keyboard_type=ft.KeyboardType.URL)
+        user = field('User', 'user', 'me')
+        port = field('Port', 'port', '22', keyboard_type=ft.KeyboardType.NUMBER, width=110)
+        paths = ft.TextField(label='Folders or drives to scan', value=', '.join(cfg.get('paths') or ['/']), hint_text='/, /mnt/media')
+        msg = ft.Text(error, color=t['red'])
+        try:
+            pub = self.store.key()[1]
+        except Exception as e:  # cryptography missing in an odd build
+            pub = 'The app could not make its key: %s' % e
+
+        def current():
+            c = dict(cfg, kind='ssh', name=name.value.strip() or host.value.strip(), host=host.value.strip(), user=user.value.strip(),
+                     port=int(port.value or 22) if (port.value or '22').isdigit() else 22,
+                     paths=[p.strip() for p in paths.value.split(',') if p.strip()] or ['/'])
+            return c
+
+        async def copy_key(e):
+            await ft.Clipboard().set(pub)
+            e.control.content = 'Copied'
+            self.page.update()
+
+        async def find(e):
+            probe = single.Single(self.store, current())
+            try:
+                found = await self.with_prompts(probe, probe.mounts)
+            except single.ScanError as err:
+                msg.value = str(err)
+                return self.page.update()
+            if found is None:
+                return
+            have = set(p.strip() for p in paths.value.split(','))
+            paths.value = ', '.join([p for p in have if p] + [m['path'] for m in found if m['path'] not in have])
+            msg.value = 'Found %d drive%s.' % (len(found), '' if len(found) == 1 else 's')
+            self.page.update()
+
+        async def go(e):
+            c = current()
+            if not c['host']:
+                msg.value = 'Fill in the host.'
+                return self.page.update()
+            await self.save_pref('single', json.dumps(c))
+            await self.save_pref('hub_url', 'single')
+            self.hub = single.Single(self.store, c)
+            await self.load()
+
+        self.screen(ft.SafeArea(ft.Container(ft.Column([
+            ft.Row([ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda e: self.show_connect()),
+                    ft.Text('Scan one computer', size=20, weight=ft.FontWeight.BOLD, color=t['text'])]),
+            ft.Text('The app logs in over SSH, runs the same read-only scanner the hub uses, and keeps the result on this phone.',
+                    color=t['text2']),
+            name, ft.Row([ft.Container(host, expand=True), port]), user, paths,
+            ft.Text("Let the app in with its own key: add this line to ~/.ssh/authorized_keys on that computer. "
+                    "Or skip it and type the password each time you scan; it's never saved.", color=t['text2'], size=12),
+            ft.Container(ft.Text(pub, selectable=True, size=11, font_family='monospace'), bgcolor=t['surface'], padding=10, border_radius=8),
+            ft.Row([ft.TextButton('Copy the key', icon=ft.Icons.COPY, on_click=copy_key),
+                    ft.TextButton('Find its drives', icon=ft.Icons.TRAVEL_EXPLORE, on_click=find)], wrap=True),
+            msg,
+            ft.FilledButton('Save and scan', icon=ft.Icons.RADAR, on_click=go),
+        ], spacing=10, scroll=ft.ScrollMode.AUTO), padding=20, expand=True)))
+
+    async def with_prompts(self, src, fn):
+        """Runs fn in a thread, asking for a password or a host-key OK when the scanner needs one."""
+        for _ in range(3):
+            try:
+                return await asyncio.to_thread(fn)
+            except single.UnknownHost as e:
+                if not await self.ask_trust(e):
+                    return None
+                src.cfg['accept_host'] = e.raw
+                if src is self.hub:
+                    await self.save_pref('single', json.dumps(src.cfg))
+            except single.NeedsPassword:
+                pw = await self.ask_password(src.cfg)
+                if pw is None:
+                    return None
+                src.password = pw
+        raise single.ScanError("Couldn't log in.")
+
+    async def ask(self, title, body, ok, field=None):
+        done = asyncio.get_running_loop().create_future()
+
+        def answer(value):
+            if not done.done():
+                done.set_result(value)
+            self.page.pop_dialog()
+        content = ft.Column([ft.Text(body)] + ([field] if field else []), tight=True)
+        if field:
+            field.on_submit = lambda e: answer(field.value)
+        self.page.show_dialog(ft.AlertDialog(modal=True, title=ft.Text(title), content=content, actions=[
+            ft.TextButton('Cancel', on_click=lambda e: answer(None)),
+            ft.FilledButton(ok, on_click=lambda e: answer(field.value if field else True))]))
+        return await done
+
+    async def ask_trust(self, e):
+        what = ('This computer\'s identity has CHANGED since last time. If you didn\'t reinstall it, don\'t trust it.\n\n' if e.changed
+                else 'First time talking to %s. Check that this matches the computer (ssh-keygen -lf /etc/ssh/ssh_host_*.pub):\n\n' % e.host)
+        return await self.ask('Trust this computer?', what + e.fingerprint, 'Trust it')
+
+    async def ask_password(self, cfg):
+        return await self.ask('Password for %s' % cfg.get('host'), "Used for this scan only; it isn't saved.", 'Scan',
+                              ft.TextField(label='%s\'s password' % (cfg.get('user') or 'the'), password=True, can_reveal_password=True,
+                                           autofocus=True))
+
+    async def scan_phone(self, e=None):
+        try:
+            import flet_permission_handler as fph
+            handler = fph.PermissionHandler()
+            status = await handler.request(fph.Permission.MANAGE_EXTERNAL_STORAGE)
+            if status != fph.PermissionStatus.GRANTED:
+                ok = await self.ask('Allow All files access', 'To measure what fills this phone, D.C. O\'HAIR needs to read all its files '
+                                    '(it never changes or sends any of them). Turn on "All files access" for it in the next screen.', 'Open settings')
+                if ok:
+                    await handler.open_app_settings()
+                return
+        except ImportError:
+            pass
+        cfg = {'kind': 'phone', 'name': 'This phone'}
+        await self.save_pref('single', json.dumps(cfg))
+        await self.save_pref('hub_url', 'single')
+        self.hub = single.Single(self.store, cfg)
+        await self.load()
 
     def show_login(self, me):
         t = self.t
@@ -155,8 +299,18 @@ class App:
             me = await asyncio.to_thread(self.hub.me)
             if me.get('auth', 'off') != 'off' and not me.get('admin'):
                 return self.show_login(me)
-            self.city = await asyncio.to_thread(self.hub.city)
+            if isinstance(self.hub, single.Single):
+                city = await self.with_prompts(self.hub, self.hub.city)
+                if city is None:
+                    return self.show_ssh_setup(self.hub.cfg) if not self.hub.is_phone else self.show_connect()
+                self.city = city
+            else:
+                self.city = await asyncio.to_thread(self.hub.city)
         except HubError as err:
+            return self.show_connect(str(err))
+        except single.ScanError as err:
+            if isinstance(self.hub, single.Single) and not self.hub.is_phone:
+                return self.show_ssh_setup(self.hub.cfg, str(err))
             return self.show_connect(str(err))
         self.units = (self.city.get('ui') or {}).get('units', 'binary')
         self.top = model.build(self.city)
@@ -534,11 +688,16 @@ class App:
             status.value = 'Scanning… big drives take a few minutes.'
             self.page.update()
             try:
-                await asyncio.to_thread(self.hub.scan)
-                while (await asyncio.to_thread(self.hub.status)).get('running'):
-                    await asyncio.sleep(3)
+                if isinstance(self.hub, single.Single):
+                    # scanning by itself: ask for a password or a host-key OK right here if needed
+                    if not await self.with_prompts(self.hub, self.hub.scan_now):
+                        raise single.ScanError('Scan cancelled.')
+                else:
+                    await asyncio.to_thread(self.hub.scan)
+                    while (await asyncio.to_thread(self.hub.status)).get('running'):
+                        await asyncio.sleep(3)
                 await self.load(quiet=True)
-            except HubError as err:
+            except (HubError, single.ScanError) as err:
                 status.value = str(err)
                 e.control.disabled = False
                 self.page.update()
@@ -575,6 +734,7 @@ class App:
         async def change_hub(ev):
             await self.save_pref('hub_url', '')
             await self.save_pref('session', '')
+            await self.save_pref('single', '')
             self.page.pop_dialog()
             self.show_connect()
 
@@ -583,12 +743,14 @@ class App:
                                  content=ft.Container(width=12, height=12, border_radius=6, bgcolor=p['accent']),
                                  alignment=ft.Alignment.CENTER, tooltip=name, on_click=functools.partial(pick, name))
                     for name, p in themes.THEMES.items()]
-        where = 'made-up demo data' if isinstance(self.hub, Demo) else self.hub.url
+        where = ('made-up demo data' if isinstance(self.hub, Demo)
+                 else 'this phone, scanned by the app' if isinstance(self.hub, single.Single) and self.hub.is_phone
+                 else '%s, over SSH' % self.hub.cfg.get('host') if isinstance(self.hub, single.Single) else self.hub.url)
         self.page.show_dialog(ft.AlertDialog(title=ft.Text('Settings'), content=ft.Column([
             ft.Text('Theme', weight=ft.FontWeight.W_600), ft.Row(swatches, wrap=True, spacing=8),
             ft.Divider(),
-            ft.Text('Hub', weight=ft.FontWeight.W_600), ft.Text(where, color=t['text2'], selectable=True),
-            ft.TextButton('Use a different hub', icon=ft.Icons.SWAP_HORIZ, on_click=change_hub),
+            ft.Text('Looking at', weight=ft.FontWeight.W_600), ft.Text(where, color=t['text2'], selectable=True),
+            ft.TextButton('Change what the app looks at', icon=ft.Icons.SWAP_HORIZ, on_click=change_hub),
         ], tight=True, spacing=8), actions=[ft.TextButton('Close', on_click=lambda ev: self.page.pop_dialog())]))
 
 

@@ -20,7 +20,7 @@ DEFAULT_CATEGORIES = {
     'video': ['.mkv', '.mp4', '.avi', '.m4v', '.mov', '.ts', '.wmv', '.webm', '.mpg', '.mpeg', '.m2ts', '.vob'],
     'series': [r'[Ss]\d{1,2}[Ee]\d{1,3}', r'season[ ._-]?\d', '/series/', '/tv/', '/shows/'],
     'games': ['/steamapps/', '/steam/', '/games/', '/heroic/', '/lutris/', 'gog games', 'epic games',
-              '/steamlibrary/', '/proton', '/itch/', '/emulat', '/roms?/'],
+              '/steamlibrary/', '/proton', '/itch/', '/emulat(?!ed/)', '/roms?/'],  # not Android's /storage/emulated/
     'big_video': 104857600,  # videos smaller than this (100 MiB) count as Other
 }
 MUSIC_I, GAMES_I, SERIES_I, MOVIES_I, OTHER_I = range(5)

@@ -1,3 +1,9 @@
 # what the app needs on the phone; flet build bundles these
 flet==1.0.4
 flet-webview==1.0.4
+# single-device mode: SSH with the app's own key (Flet ships mobile builds of these)
+paramiko==3.5.1
+cryptography==43.0.1
+bcrypt==4.2.0
+pynacl==1.5.0
+flet-permission-handler==1.0.4

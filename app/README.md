@@ -11,6 +11,13 @@ A small app for phones and tablets that shows your [D.C. O'HAIR](../README.md) d
 
 It connects to your hub over your network. If your hub has an admin login, the app asks for the password once. Hubs that sign in with a reverse proxy or OIDC aren't supported in the app yet. Not set up yet? Press **Look around a made-up home network first**.
 
+## No hub? The app can scan by itself
+
+- **Scan one computer over SSH**: fill in its address and user, then let the app in with the key it shows (add the line to `~/.ssh/authorized_keys` on that computer), or type the password when it asks; a typed password is used for that scan only and never saved. **Find its drives** lists the computer's real drives to pick from. The first time, the app shows the computer's fingerprint to check, and it warns you if that ever changes. The computer needs `python3`; Macs need **Remote Login** turned on.
+- **Scan this phone** (Android): measures the phone's storage and any SD card. Android asks you to allow **All files access** first; the app only reads, and nothing leaves the phone.
+
+Both use the hub's own read-only scanner and keep the last result on the phone. **Scan now** under Alerts scans again, and Settings → **Change what the app looks at** goes back to a hub.
+
 ## Try it on a computer
 
 ```sh

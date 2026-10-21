@@ -25,3 +25,6 @@ module = "main"
 
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true
+# "Scan this phone" measures every file, so it asks for All files access (sideloaded builds)
+"android.permission.READ_EXTERNAL_STORAGE" = true
+"android.permission.MANAGE_EXTERNAL_STORAGE" = true
