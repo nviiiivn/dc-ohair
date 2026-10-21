@@ -70,6 +70,30 @@ hub:
 | `health.scrutiny_url` | Your Scrutiny's address, like `http://scrutiny.local:8080`. |
 | `health.scrutiny_token_cmd` | Optional. A command that prints a token for a Scrutiny behind a login; sent as `Authorization: Bearer`. |
 | `health.failing_dot` | Show a small red dot on failing drives even with Health off. Default `true`. |
+| `alerts.health` | Send notifications about drive health. Default `true`. |
+| `alerts.offline` | Send notifications when a device can't be scanned. Default `false`, because sleeping laptops make it noisy. |
+| `notify` | Where alerts go: a list of channels, see below. |
+
+### notify
+
+```yaml
+hub:
+  notify:
+    - {type: ntfy, url: "https://ntfy.sh/my-disk-city"}
+    - {type: discord, url_cmd: "pass show discord/disk-hook"}
+    - {type: email, smtp_host: mail.example.com, smtp_port: 587, smtp_user: me@example.com,
+       smtp_password_cmd: "pass show mail", from: hub@example.com, to: me@example.com}
+    - {type: webhook, url: "https://example.com/hook"}
+```
+
+| Type | Fields |
+|---|---|
+| `ntfy` | `url` (the topic URL) or `url_cmd`. |
+| `discord` | `url` (the channel's webhook URL) or `url_cmd`. |
+| `email` | `smtp_host`, `smtp_port` (587 uses STARTTLS, 465 uses SSL), `smtp_user`, `smtp_password_cmd`, `from`, `to`. Set `starttls: false` for a plain local relay. |
+| `webhook` | `url`. Gets a JSON POST with `title`, `text`, `level` and the `alerts` list. |
+
+Any `*_cmd` is a command whose printed output is used, so webhook URLs and passwords can stay in a password manager. The hub sends only when something changes: a new or worse alert, or one that cleared.
 | `ui.view` | `city` | The default view for someone who hasn't picked one: `city`, `circle` or `epcot`. |
 | `ui.units` | `binary` | `binary` shows sizes in powers of 1024 (a "2 TB" drive shows as 1.82T). `decimal` uses powers of 1000 (2.00TB). |
 | `theme.default` | `dark` | The theme for someone who hasn't picked one: `dark`, `light`, `sepia`, `cyberpunk`, `matrix` or `ocean`. |

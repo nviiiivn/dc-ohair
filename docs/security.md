@@ -36,6 +36,10 @@ A push agent downloads the hub's current `agent.py` before every run, so a devic
 
 The admin password for the page (if you turn one on) is stored only as an **argon2** hash. If argon2-cffi isn't installed, a **scrypt** hash is used instead.
 
+### Commands in the config are guarded
+
+`password_cmd`, the notification `url_cmd` and `smtp_password_cmd`, and `scrutiny_token_cmd` are all commands the hub runs. With no login turned on, the settings page refuses to add or change any of them unless the browser is on the hub machine itself; edit the config file instead, or turn on a login.
+
 ### password_cmd is a command, so guard it
 
 Whoever can set a device's `password_cmd` can make the hub run a command. That's why:

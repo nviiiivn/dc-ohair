@@ -28,7 +28,7 @@ SECRETS = [
     ('Google key', re.compile(r'\bAIza[0-9A-Za-z_-]{35}\b')),
     ('Anthropic/OpenAI key', re.compile(r'\bsk-(ant-)?[A-Za-z0-9_-]{20,}')),
     ('hard-coded password', re.compile(r'''(?i)\b(pass(word)?|passwd|secret|api_?key|token)\s*[:=]\s*['"][^'"\s{}$<>]{6,}['"]''')),
-    ('email address', re.compile(r'\b[A-Za-z0-9._%+-]+@(?!users\.noreply\.github\.com)[A-Za-z0-9.-]+\.(com|net|org|io|me|dev|lol)\b')),
+    ('email address', re.compile(r'\b[A-Za-z0-9._%+-]+@(?!users\.noreply\.github\.com|example\.(?:com|org|net)\b)[A-Za-z0-9.-]+\.(com|net|org|io|me|dev|lol)\b')),
 ]
 SKIP_DIRS = ('.git/', 'web/vendor/')
 BINARY = ('.png', '.gif', '.jpg', '.jpeg', '.webp', '.ico', '.woff', '.woff2')

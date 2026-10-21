@@ -13,14 +13,22 @@ from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import collect
+import notify as notifier
 from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.5.0'
+VERSION = '0.6.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
+
+
+def human(b):
+    for unit, size in (('T', 1024 ** 4), ('G', 1024 ** 3), ('M', 1024 ** 2)):
+        if b >= size:
+            return ('%.2f%s' if unit == 'T' else '%.0f%s') % (b / size, unit)
+    return '%dB' % b
 
 
 def clock_times(schedule):
@@ -127,11 +135,26 @@ class RateLimit:
 
 # ---------- the hub ----------
 
+def commands_in(cfg):
+    """Every command the hub would run from this config: password_cmd, *_cmd in health and notify."""
+    out = set()
+    if not isinstance(cfg, dict):
+        return out
+    for d in cfg.get('devices') or []:
+        if isinstance(d, dict) and d.get('password_cmd'):
+            out.add(json.dumps(d['password_cmd']))
+    hubcfg = cfg.get('hub') or {}
+    places = [hubcfg.get('health') or {}] + [c for c in hubcfg.get('notify') or [] if isinstance(c, dict)]
+    for place in places:
+        for k, v in place.items():
+            if k.endswith('_cmd') and v:
+                out.add(json.dumps(v))
+    return out
+
+
 def changed_commands(old, new):
-    """True when new sets a password_cmd that old didn't have for that device."""
-    before = {d.get('id'): d.get('password_cmd') for d in (old or {}).get('devices') or []}
-    return any(d.get('password_cmd') and d.get('password_cmd') != before.get(d.get('id'))
-               for d in (new or {}).get('devices') or [] if isinstance(d, dict))
+    """True when new brings in a command old didn't have (commands run on the hub)."""
+    return bool(commands_in(new) - commands_in(old))
 
 
 class Hub:
@@ -154,7 +177,9 @@ class Hub:
 
     def city(self):
         if self.demo:
-            return dict(self.demo['city'], ui=self.ui())
+            city = dict(self.demo['city'], ui=self.ui())
+            city['alerts'] = self.current_alerts(city)
+            return city
         status = load(os.path.join(DATA, 'status.json'), {})
         devices = []
         for dev in self.cfg['devices']:
@@ -175,8 +200,10 @@ class Hub:
             devices.append({'id': dev['id'], 'name': dev['name'], 'note': dev.get('note', ''),
                             'hub': bool(dev.get('local')), 'status': status.get(dev['id']), 'drives': drives})
         self.attach_health(devices)
-        return {'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'version': VERSION,
+        city = {'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'version': VERSION,
                 'alert_percent': self.cfg['hub']['alert_percent'], 'ui': self.ui(), 'devices': devices}
+        city['alerts'] = self.current_alerts(city)
+        return city
 
     def ui(self):
         health = self.cfg['hub'].get('health') or {}
@@ -372,7 +399,9 @@ class Hub:
                     d['drives'] = [{'name': x['name'], 'path': x['path']} for x in out['drives'] if x.get('name') and x.get('path')]
             collect.save_config(collect.validate(cfg), self.path)
             self.cfg = cfg
-        return collect.store(dev, out, self.cfg)
+        msg = collect.store(dev, out, self.cfg)
+        threading.Thread(target=self.notify, daemon=True).start()
+        return msg
 
     def set_password(self, pw):
         self.cfg['hub']['admin_password'] = hash_password(pw)
@@ -416,22 +445,62 @@ class Hub:
         finally:
             self.running = False
 
+    # ----- alerts -----
+
+    def channels(self):
+        hubcfg = self.cfg['hub']
+        chans = [c for c in hubcfg.get('notify') or [] if isinstance(c, dict)]
+        if hubcfg.get('alert_webhook'):  # the older single-URL setting
+            chans.append({'type': 'ntfy', 'url': hubcfg['alert_webhook']})
+        return chans
+
+    def current_alerts(self, city=None):
+        """Drives over the full line, drives whose health is off, and (if asked for) devices that couldn't be scanned."""
+        city = city or self.city()
+        opts = self.cfg['hub'].get('alerts') or {}
+        limit = city['alert_percent']
+        out = []
+        for dev in city['devices']:
+            st = dev.get('status')
+            if opts.get('offline') and st and not st.get('ok'):
+                out.append({'key': 'scan:' + dev['id'], 'kind': 'scan', 'level': 'warning', 'device': dev['name'],
+                            'msg': "%s couldn't be scanned: %s" % (dev['name'], st.get('msg'))})
+            for d in dev['drives']:
+                where = '%s / %s' % (dev['name'], d['name'])
+                fs = d.get('fs') or {}
+                if fs.get('total'):
+                    pct = 100.0 * fs['used'] / fs['total']
+                    if pct >= limit:
+                        out.append({'key': 'full:%s/%s' % (dev['id'], d['name']), 'kind': 'full', 'device': dev['name'], 'drive': d['name'],
+                                    'level': 'critical' if pct >= 98 else 'warning', 'percent': round(pct, 1),
+                                    'msg': '%s is %d%% full (%s free)' % (where, round(pct), human(fs['free']))})
+                h = d.get('health')
+                if h and h.get('state') in ('warning', 'failing') and opts.get('health', True):
+                    out.append({'key': 'health:%s/%s' % (dev['id'], d['name']), 'kind': 'health', 'device': dev['name'], 'drive': d['name'],
+                                'level': 'critical' if h['state'] == 'failing' else 'warning',
+                                'msg': '%s health: %s%s' % (where, h['state'], ' (%s)' % '; '.join(h['notes']) if h.get('notes') else '')})
+        return out
+
     def notify(self):
-        """POST once to alert_webhook when a drive first crosses alert_percent."""
-        url = self.cfg['hub'].get('alert_webhook')
-        state_path = os.path.join(DATA, 'alerts.json')
-        before = set(load(state_path, []))
-        now = {d['device'] + '/' + d['drive']: d for d in self.drives() if d['alert']}
-        collect.save(state_path, sorted(now))
-        new = [d for key, d in now.items() if key not in before]
-        if not url or not new:
+        """Sends what changed since last time: new or worse alerts, and ones that cleared."""
+        path = os.path.join(DATA, 'alerts.json')
+        before = load(path, {})
+        if isinstance(before, list):  # the old format only remembered full drives
+            before = {'full:' + k: 'warning' for k in before}
+        alerts = self.current_alerts()
+        now = {a['key']: a['level'] for a in alerts}
+        collect.save(path, now)
+        rank = {'warning': 1, 'critical': 2}
+        new = [a for a in alerts if rank[a['level']] > rank.get(before.get(a['key']), 0)]
+        gone = [k for k in before if k not in now]
+        chans = self.channels()
+        if not chans or not (new or gone):
             return
-        text = '\n'.join('%s / %s is %s%% full' % (d['device_name'], d['drive'], d['percent']) for d in new)
-        req = urllib.request.Request(url, data=text.encode(), headers={'Title': "D.C. O'HAIR: drive almost full"})
-        try:
-            urllib.request.urlopen(req, timeout=15).close()
-        except OSError:
-            pass
+        lines = [a['msg'] for a in new] + ['Back to normal: %s' % k.split(':', 1)[1].replace('/', ' / ') for k in gone]
+        level = 'critical' if any(a['level'] == 'critical' for a in new) else 'warning'
+        subject = "D.C. O'HAIR: " + (lines[0] if len(lines) == 1 else '%d changes to your drives' % len(lines))
+        results = notifier.send_all(chans, subject, '\n'.join(lines), level, new)
+        collect.save(os.path.join(DATA, 'notify.json'), {'when': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'results': results})
 
     def scheduler(self):
         while True:
@@ -554,7 +623,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/drives':
             return self.send_json(self.hub.drives())
         if path == '/api/alerts':
-            return self.send_json([d for d in self.hub.drives() if d['alert']])
+            return self.send_json(self.hub.current_alerts())
         if path == '/api/history':
             days = 90
             for part in query.split('&'):
@@ -640,8 +709,8 @@ class Handler(SimpleHTTPRequestHandler):
                     cfg = yaml.safe_load(data.get('yaml', ''))
                 # password_cmd runs on the hub, so with no login only a browser on the hub may change it
                 if hub.auth == 'off' and not self.is_local() and changed_commands(hub.cfg, cfg):
-                    return self.send_json({'error': 'With no login turned on, password_cmd can only be changed from a browser '
-                                                    'on the hub itself, or in the config file. Turn on a login under Security.'}, 403)
+                    return self.send_json({'error': 'With no login turned on, commands (password_cmd and other *_cmd settings) can only be '
+                                                    'added from a browser on the hub itself, or in the config file. Turn on a login under Security.'}, 403)
                 hub.save_config(cfg)
             except (ValueError, TypeError, AttributeError, KeyError) as e:
                 return self.send_json({'error': str(e)}, 400)
@@ -665,6 +734,8 @@ class Handler(SimpleHTTPRequestHandler):
                 h['known'] = known.get(h['ip']) or known.get(h['name']) or ''
             return self.send_json(found)
         if path == '/api/health/test':
+            if hub.auth == 'off' and not self.is_local() and changed_commands(hub.cfg, {'hub': {'health': data.get('health') or {}}}):
+                return self.send_json({'ok': False, 'error': 'Save first: with no login on, commands can only be added from a browser on the hub.'})
             cfg = json.loads(json.dumps(hub.cfg))
             cfg['hub']['health'] = dict(cfg['hub'].get('health') or {}, **(data.get('health') or {}))
             probe = Hub(cfg, demo=None)
@@ -676,6 +747,13 @@ class Handler(SimpleHTTPRequestHandler):
             probe.attach_health(devices)
             matched = sum(1 for dv in devices for d in dv['drives'] if d.get('health'))
             return self.send_json({'ok': True, 'disks': len(disks), 'matched': matched})
+        if path == '/api/notify/test':
+            ch = data.get('channel') or {}
+            if hub.auth == 'off' and not self.is_local() and changed_commands(hub.cfg, {'hub': {'notify': [ch]}}):
+                return self.send_json({'type': ch.get('type'), 'ok': False, 'error': 'Save this channel first: with no login on, '
+                                       'commands can only be added from a browser on the hub, or in the config file.'})
+            results = notifier.send_all([ch], "D.C. O'HAIR test", 'This is a test from your disk city. If you can read it, alerts will reach you here.')
+            return self.send_json(results[0])
         if path in ('/api/push/token', '/api/push/revoke'):
             dev_id = data.get('id', '')
             try:
@@ -752,6 +830,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({'token': 'demo-token-not-real', 'hub': 'http://192.0.2.5:7171'})
         if path == '/api/health/test':
             return self.send_json({'ok': True, 'disks': 6, 'matched': 5})
+        if path == '/api/notify/test':
+            return self.send_json({'type': (data.get('channel') or {}).get('type'), 'ok': True})
         if path == '/api/discover':
             time.sleep(1.2)
             return self.send_json({'network': '192.0.2.0/24', 'hub': '192.0.2.5', 'hosts': hub.demo['found']})

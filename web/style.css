@@ -332,3 +332,17 @@ i.fail { color: var(--red); font-style: normal; font-size: 10px; margin-right: 4
 .info .health.warning b { color: #f5a524; }
 .info .health.failing b { color: var(--red); }
 .settings label.tick { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+
+/* alert banner, on its own line under the toolbar */
+#banner { flex-basis: 100%; display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-left: 4px solid #f5a524; }
+#banner.critical { border-left-color: var(--red); }
+#banner .ic { color: #f5a524; font-size: 15px; line-height: 1.5; }
+#banner.critical .ic { color: var(--red); }
+#banner .msgs { flex: 1; display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: center; }
+#banner .msgs button { border: 0; background: none; color: var(--text); padding: 2px 0; cursor: pointer; text-align: left; font-size: 13px; }
+#banner .msgs button:hover { text-decoration: underline; }
+#banner small { color: var(--text2); }
+#banner .x { border: 0; background: none; color: var(--text2); cursor: pointer; font-size: 14px; }
+.channel { border: 1px solid var(--border); border-radius: 8px; padding: 4px 12px; margin: 8px 0; }
+.channel .row { margin: 6px 0; }
+.spacer { flex: 1; }

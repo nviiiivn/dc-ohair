@@ -232,6 +232,62 @@ class ScrutinyTest(unittest.TestCase):
         self.assertNotIn('health', c)
 
 
+class CommandGuardTest(unittest.TestCase):
+    def test_new_commands_are_noticed_anywhere(self):
+        old = {'devices': [{'id': 'a', 'password_cmd': 'pass a'}], 'hub': {}}
+        self.assertFalse(hub.changed_commands(old, old))
+        self.assertTrue(hub.changed_commands(old, {'devices': [{'id': 'a', 'password_cmd': 'evil'}]}))
+        self.assertTrue(hub.changed_commands(old, {'hub': {'notify': [{'type': 'discord', 'url_cmd': 'evil'}]}}))
+        self.assertTrue(hub.changed_commands(old, {'hub': {'health': {'scrutiny_token_cmd': 'evil'}}}))
+        self.assertFalse(hub.changed_commands(old, {'hub': {'notify': [{'type': 'ntfy', 'url': 'https://ntfy.sh/x'}]}}))
+
+
+class NotifyTest(unittest.TestCase):
+    def setUp(self):
+        import http.server, threading
+        self.got = got = []
+
+        class Catch(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers['Content-Length']))
+                got.append((self.path, dict(self.headers), body))
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+        self.srv = http.server.HTTPServer(('127.0.0.1', 0), Catch)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.url = 'http://127.0.0.1:%d' % self.srv.server_port
+
+    def tearDown(self):
+        self.srv.shutdown()
+
+    def test_channels(self):
+        import notify
+        res = notify.send_all([{'type': 'ntfy', 'url': self.url + '/t'}, {'type': 'discord', 'url': self.url + '/d'},
+                               {'type': 'webhook', 'url': self.url + '/w'}, {'type': 'pigeon'}], 'Subj', 'Body', 'critical')
+        self.assertEqual([r['ok'] for r in res], [True, True, True, False])
+        ntfy, discord, hook = self.got
+        self.assertEqual((ntfy[1]['Title'], ntfy[1]['Priority'], ntfy[2]), ('Subj', '4', b'Body'))
+        self.assertIn('**Subj**', json.loads(discord[2])['content'])
+        self.assertEqual(json.loads(hook[2])['level'], 'critical')
+
+    def test_only_changes_are_sent(self):
+        d = demo.build()
+        cfg = collect.validate(d['config'])
+        cfg['hub']['notify'] = [{'type': 'ntfy', 'url': self.url + '/n'}]
+        h = hub.Hub(cfg, demo=d)
+        state = os.path.join(collect.DATA, 'alerts.json')
+        if os.path.exists(state):
+            os.unlink(state)
+        h.notify()
+        self.assertEqual(len(self.got), 1)
+        self.assertIn('failing', self.got[0][2].decode())
+        h.notify()  # nothing changed, nothing sent
+        self.assertEqual(len(self.got), 1)
+
+
 class DiscoverTest(unittest.TestCase):
     def test_only_small_private_networks(self):
         import discover

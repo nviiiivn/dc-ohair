@@ -431,6 +431,21 @@ async function save(dlg, quiet) {
   }
 }
 
+function channelForm(c, i) {
+  const f = (label, key, ph, extra = '') => `<label>${label} <input data-ch="${i}" data-ck="${key}" value="${esc(list(c[key]))}" placeholder="${esc(ph)}" class="mono" ${extra}></label>`;
+  const body = {
+    ntfy: f('Topic URL', 'url', 'https://ntfy.sh/my-disks') + f('…or a command that prints it', 'url_cmd', ''),
+    discord: f('Webhook URL', 'url', 'https://discord.com/api/webhooks/…') + f('…or a command that prints it', 'url_cmd', 'pass show discord/hook'),
+    webhook: f('URL (gets a JSON POST)', 'url', 'https://example.com/hook'),
+    email: `<div class="grid3">${f('SMTP server', 'smtp_host', 'mail.example.com')}${f('Port', 'smtp_port', '587', 'inputmode="numeric"')}${f('User', 'smtp_user', 'me@example.com')}</div>`
+      + f('Command that prints the SMTP password', 'smtp_password_cmd', 'pass show mail') + `<div class="grid2">${f('From', 'from', 'hub@example.com')}${f('To', 'to', 'me@example.com')}</div>`,
+  }[c.type] || '';
+  const name = { ntfy: 'ntfy', discord: 'Discord', email: 'Email', webhook: 'Webhook' }[c.type] || c.type;
+  return `<div class="channel"><div class="row"><b>${esc(name)}</b><span class="spacer"></span>
+    <button type="button" class="ghost" data-testch="${i}">Send a test</button><button type="button" class="danger" data-dropch="${i}">Remove</button></div>
+    ${body}<p class="result" data-chres="${i}" aria-live="polite"></p></div>`;
+}
+
 function field(label, key, value, attrs = '') {
   return `<label>${label} <input data-k="${key}" value="${esc(value)}" ${attrs}></label>`;
 }
@@ -479,9 +494,22 @@ function render(dlg) {
       <label>Series patterns (other big videos are Movies) <input data-k="scan.categories.series" data-list value="${esc(list(cat.series))}" placeholder="${esc(list(def.series))}" class="mono"></label>
       <label>Games patterns <input data-k="scan.categories.games" data-list value="${esc(list(cat.games))}" placeholder="${esc(list(def.games))}" class="mono"></label>`;
   } else if (S.tab === 'alerts') {
-    html = `<div class="grid2">${field('Flag drives at or above (% full)', 'hub.alert_percent', hub.alert_percent, 'inputmode="numeric"')}</div>
-      ${field('Notify this URL when a drive crosses it (optional)', 'hub.alert_webhook', hub.alert_webhook || '', 'placeholder="https://ntfy.sh/your-topic" class="mono"')}
-      <p class="muted">The hub sends a short POST the first time a drive crosses the line. ntfy topics work as-is.</p>`;
+    if (hub.alert_webhook) {  // the older single URL becomes an ntfy channel
+      hub.notify = (hub.notify || []).concat([{ type: 'ntfy', url: hub.alert_webhook }]);
+      delete hub.alert_webhook;
+      S.dirty = true;
+    }
+    const al = hub.alerts || {};
+    const chans = hub.notify || [];
+    html = `<div class="grid2">${field('A drive is "almost full" at (% used)', 'hub.alert_percent', hub.alert_percent, 'inputmode="numeric"')}</div>
+      <p class="muted">Almost-full drives get a banner on the page. Notifications below are optional, and only go out when something changes: a drive crosses the line, its health turns, or it's back to normal.</p>
+      <label class="tick"><input type="checkbox" data-k="hub.alerts.health" ${al.health === false ? '' : 'checked'}> Notify about drive health (when health is set up)</label>
+      <label class="tick"><input type="checkbox" data-k="hub.alerts.offline" ${al.offline ? 'checked' : ''}> Notify when a device can't be scanned (noisy if your laptops sleep)</label>
+      <h4>Send alerts to</h4>
+      ${chans.map((c, i) => channelForm(c, i)).join('') || '<p class="muted">Nowhere yet.</p>'}
+      <div class="row"><button type="button" data-addch="ntfy">+ ntfy</button><button type="button" data-addch="discord">+ Discord</button>
+        <button type="button" data-addch="email">+ Email</button><button type="button" data-addch="webhook">+ Webhook</button></div>
+      <p class="muted">Secrets don't have to live in the config: any URL or password can come from a command that prints it, such as <span class="mono">pass show discord/hook</span>.</p>`;
   } else if (S.tab === 'health') {
     const hc = hub.health || {};
     const mode = hc.mode || 'off';
@@ -561,6 +589,12 @@ function setPath(obj, path, value) {
 function wire(body, dlg) {
   body.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.ch !== undefined) {
+      const ch = S.cfg.hub.notify[t.dataset.ch];
+      const v = t.dataset.ck === 'smtp_port' ? (parseInt(t.value, 10) || '') : t.value.trim();
+      if (v === '') delete ch[t.dataset.ck]; else ch[t.dataset.ck] = v;
+      return;
+    }
     if (!t.dataset.k) return;
     let v = t.value;
     if (t.type === 'checkbox') v = t.checked;
@@ -603,6 +637,30 @@ function wire(body, dlg) {
         out.className = 'result ok';
         S.me = await api('/api/me');
       } catch (err) { out.textContent = err.message; out.className = 'result err'; }
+    }
+    const addch = t.closest('[data-addch]');
+    if (addch) {
+      S.cfg.hub.notify = (S.cfg.hub.notify || []).concat([{ type: addch.dataset.addch }]);
+      S.dirty = true;
+      return render(dlg);
+    }
+    const dropch = t.closest('[data-dropch]');
+    if (dropch) {
+      S.cfg.hub.notify.splice(+dropch.dataset.dropch, 1);
+      S.dirty = true;
+      return render(dlg);
+    }
+    const testch = t.closest('[data-testch]');
+    if (testch) {
+      const res = body.querySelector(`[data-chres="${testch.dataset.testch}"]`);
+      res.textContent = 'Sending…';
+      res.className = 'result muted';
+      try {
+        const r = await api('/api/notify/test', { channel: S.cfg.hub.notify[testch.dataset.testch] });
+        res.textContent = r.ok ? 'Sent. Check that it arrived.' : r.error;
+        res.className = 'result ' + (r.ok ? 'ok' : 'err');
+      } catch (err) { res.textContent = err.message; res.className = 'result err'; }
+      return;
     }
     if (t.closest('[data-htest]')) {
       out.textContent = 'Asking Scrutiny…';

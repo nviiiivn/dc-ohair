@@ -5,9 +5,19 @@ All notable changes to D.C. O'HAIR are listed here. Versions follow [semantic ve
 ## [Unreleased]
 
 ### Planned
-- Notifications: ntfy, Discord and email.
 - OIDC login, and a VoidAuth helper.
 - Phone apps on the same JSON API.
+
+## [0.6.0] - alerts and notifications
+
+### Added
+- An **alert banner** under the toolbar for drives over the full line and failing drives (health warnings only while Health is on). Tap a line to fly to the drive; hide them for the session.
+- **Notifications** to ntfy, Discord, email (SMTP, STARTTLS or SSL) and plain JSON webhooks, set up in Settings → Alerts with a test button each. Only changes are sent: new or worse alerts, and ones that cleared. Optional alerts for devices that couldn't be scanned.
+- Secrets for channels can come from `url_cmd` and `smtp_password_cmd`, so they never have to sit in the config.
+
+### Changed
+- `hub.alert_webhook` still works, as an ntfy channel; Settings moves it into the new list.
+- With login off, any command setting (`password_cmd`, `url_cmd`, `smtp_password_cmd`, `scrutiny_token_cmd`) can only be added from a browser on the hub itself, or in the config file.
 
 ## [0.5.0] - drive health, hidden by default
 

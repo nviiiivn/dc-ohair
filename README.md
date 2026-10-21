@@ -214,6 +214,15 @@ Hide the pane with the tab on its edge, and bring it back the same way. On a pho
 
 <p align="center"><img src="docs/media/pane.gif" width="900" alt="Hiding and showing the side pane"></p>
 
+### Alerts
+
+When a drive passes the "almost full" line (90% by default), a banner appears under the toolbar; tap a line to fly to that drive, or hide them for the session. A failing drive shows there too.
+
+Want to hear about it away from the page? Add any mix of **ntfy**, **Discord**, **email** or a plain **webhook** in **Settings → Alerts**, and press **Send a test**. The hub only sends when something changes: a drive crosses the line, its health turns, or it's back to normal. It never repeats the same alert every night.
+
+<p align="center"><img src="docs/media/alerts.png" width="760" alt="The alert banner"></p>
+<p align="center"><img src="docs/media/settings-alerts.png" width="760" alt="Settings: where alerts go"></p>
+
 ### Drive health (optional, out of sight until you want it)
 
 Turn it on in **Settings → Health** with either source:
@@ -242,7 +251,7 @@ Press the gear to open Settings:
 |---|---|
 | **Devices** | Add, edit and remove devices, find their drives, test the connection, scan now. Each drive can have "leave out" patterns like `*/node_modules`. |
 | **Scanning** | Scan times, the smallest file or folder to draw, folder depth, how long to keep history, and the rules for what counts as Music, Games, Series and Movies. |
-| **Alerts** | The "almost full" line, and an optional URL to notify (an ntfy topic works as-is). |
+| **Alerts** | The "almost full" line, and where alerts go: ntfy, Discord, email or a webhook, each with a test button. |
 | **Health** | Where drive health comes from (your Scrutiny, or built-in SMART), and the failing-drive dot. |
 | **Look** | The default theme, view and units for people who haven't picked their own. |
 | **Security** | Who can open the page: anyone, an admin login, or your reverse proxy. |
@@ -311,7 +320,7 @@ Everything the page shows comes from a JSON API, and it's meant to stay stable s
 | GET | `/api/me` | Login state, auth mode, whether setup is needed |
 | GET | `/api/city` | Every device and drive, with the full size tree |
 | GET | `/api/drives` | A flat list of drives: used, free, total, percent, alert, categories |
-| GET | `/api/alerts` | Only the drives over the alert line |
+| GET | `/api/alerts` | What's wrong right now: full drives, drive health, and (if you asked) devices that couldn't be scanned |
 | GET | `/api/history?days=90` | Used space over time, per drive |
 | GET | `/api/status` | Whether a scan is running, the next scan time, per-device progress |
 | GET | `/api/settings` | The config (without the admin password hash) plus the hub's public key |
@@ -337,7 +346,6 @@ curl -s -X POST -H 'X-DC: 1' http://localhost:7171/api/scan
 
 Coming next, roughly in this order:
 
-- **Notifications.** ntfy, Discord and email for alerts.
 - **More login options.** OIDC, and a helper that writes a VoidAuth + Caddy setup for you.
 - **Phone apps** (iOS and Android) on the same JSON API.
 

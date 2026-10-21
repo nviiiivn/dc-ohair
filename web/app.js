@@ -1112,6 +1112,43 @@ tbody.addEventListener('mouseover', (e) => {
 });
 tbody.addEventListener('mouseleave', () => setHover(null));
 
+// ---------- alert banner ----------
+// full drives always; failing drives unless the dot is turned off; health
+// warnings only while Health is on. Dismissed ones stay hidden this session.
+
+function dismissed() {
+  try { return JSON.parse(sessionStorage.getItem('dc-dismissed')) || []; } catch { return []; }
+}
+
+function renderBanner() {
+  const box = $('#banner');
+  const gone = dismissed();
+  const show = (api && api.alerts || []).filter((a) => !gone.includes(a.key + ':' + a.level) && (a.kind !== 'health'
+    || (a.level === 'critical' && api.ui.failing_dot !== false) || showHealth));
+  box.hidden = !show.length;
+  if (!show.length) return;
+  box.alerts = show;
+  box.className = 'float ' + (show.some((a) => a.level === 'critical') ? 'critical' : 'warning');
+  box.innerHTML = `<span class="ic" aria-hidden="true">⚠</span><span class="msgs">${show.slice(0, 3).map((a, i) =>
+    `<button type="button" data-a="${i}">${esc(a.msg)}</button>`).join('')}${show.length > 3 ? `<small>and ${show.length - 3} more</small>` : ''}</span>
+    <button type="button" class="x" data-dismiss aria-label="Hide these alerts">✕</button>`;
+}
+
+$('#banner').addEventListener('click', (e) => {
+  const box = $('#banner');
+  if (e.target.closest('[data-dismiss]')) {
+    try { sessionStorage.setItem('dc-dismissed', JSON.stringify(dismissed().concat(box.alerts.map((a) => a.key + ':' + a.level)))); } catch { /* private mode */ }
+    box.hidden = true;
+    return;
+  }
+  const b = e.target.closest('[data-a]');
+  if (!b) return;
+  const a = box.alerts[b.dataset.a];
+  const dev = api.devices.find((d) => d.name === a.device);
+  const dr = dev && dev.drives.find((d) => d.name === a.drive);
+  if (dr && dr.node) goTo(dr.node);
+});
+
 // ---------- search ----------
 // every folder and file in every drive, searchable by name; the easter egg
 // for "door locks" flies to the biggest file in the whole city
@@ -1279,6 +1316,7 @@ healthBtn.addEventListener('click', () => {
   if (!api) return;
   rebuild();
   table(api);
+  renderBanner();
   showCard();
 });
 
@@ -1433,6 +1471,7 @@ async function load() {
     root = next;
   }
   table(api);
+  renderBanner();
   buildIndex();
   rebuild();
   crumbs();
