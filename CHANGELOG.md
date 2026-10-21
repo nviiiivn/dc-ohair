@@ -2,7 +2,7 @@
 
 All notable changes to Disk City are listed here. Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - the phone app
 
 ### Added
 - **Phone and tablet app** (`app/`, built with Flet): Drives, Browse with a tappable treemap, the 3D City, Search and Alerts, on your hub's JSON API.

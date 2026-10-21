@@ -20,7 +20,7 @@ from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
-VERSION = '0.7.0'
+VERSION = '0.8.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
 SESSION_DAYS = 30
