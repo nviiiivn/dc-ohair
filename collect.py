@@ -133,16 +133,17 @@ def hub_pubkey():
         return f.read().strip()
 
 
-def agent_sha():
-    with open(AGENT, 'rb') as f:
+def agent_sha(script=AGENT):
+    with open(script, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
 
 
-def restricted_key_line():
-    """An authorized_keys line that lets the hub's key run this exact agent.py and nothing else."""
+def restricted_key_line(script=AGENT):
+    """An authorized_keys line that lets the hub's key run this exact script (agent.py unless
+    another is named, e.g. the toolbox's tools agent) and nothing else."""
     code = ("import sys,hashlib;c=sys.stdin.buffer.read();h=hashlib.sha256(c).hexdigest();"
             "sys.exit('dc-ohair: agent '+h[:12]+' is not the one this key allows') if h!='%s' else None;"
-            "sys.argv=['agent',sys.argv[-1].split()[-1]];exec(compile(c,'agent.py','exec'))") % agent_sha()
+            "sys.argv=['agent',sys.argv[-1].split()[-1]];exec(compile(c,'agent.py','exec'))") % agent_sha(script)
     opts = 'command="python3 -c \\"%s\\" $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty' % code
     return opts + ' ' + hub_pubkey()
 
@@ -200,12 +201,13 @@ def password(dev):
     return p.stdout.strip()
 
 
-def run_agent(dev, spec, timeout):
-    """Runs agent.py with spec on dev. Returns (parsed JSON, None) or (None, plain-language error)."""
+def run_agent(dev, spec, timeout, script=AGENT):
+    """Runs agent.py (or another script of the same kind, e.g. the toolbox's tools agent) with spec
+    on dev. Returns (parsed JSON, None) or (None, plain-language error)."""
     arg = base64.b64encode(json.dumps(spec).encode()).decode()
     env = None
     if dev.get('local'):
-        cmd, stdin = [sys.executable, AGENT, arg], subprocess.DEVNULL
+        cmd, stdin = [sys.executable, script, arg], subprocess.DEVNULL
     else:
         cmd = ['ssh', '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ServerAliveInterval=30']
         cmd += identity_args()
@@ -225,7 +227,7 @@ def run_agent(dev, spec, timeout):
             cmd = ['sshpass', '-e'] + cmd
         else:
             cmd.insert(1, '-oBatchMode=yes')
-        stdin = open(AGENT, 'rb')
+        stdin = open(script, 'rb')
     try:
         p = subprocess.run(cmd, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, timeout=timeout)
     except subprocess.TimeoutExpired:

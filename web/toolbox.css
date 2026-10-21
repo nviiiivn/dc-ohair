@@ -25,3 +25,10 @@
 #toolbox .s-hash { background: var(--green, #2bb673); color: var(--bg); }
 #toolbox .s-partial, #toolbox .s-name { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 @media (max-width: 700px) { #toolbox { top: 88px; bottom: calc(var(--peek, 0px) + 64px); width: auto; right: 12px; } }
+#toolbox .check { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+#toolbox .check p { margin: 0 0 6px; }
+#toolbox .check button { margin: 0 6px 6px 0; }
+#toolbox .check pre { white-space: pre-wrap; word-break: break-all; font-size: 11px; background: var(--ch-bg); padding: 6px; border-radius: 6px; }
+#toolbox .job { list-style: none; padding: 0; margin: 4px 0 0; }
+#toolbox .job li { padding: 2px 0; }
+#toolbox .job small { display: block; color: var(--text2); }

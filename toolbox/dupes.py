@@ -70,6 +70,7 @@ def same_size(all_files, min_size=0, hashes=None):
     for size, members in by_size.items():
         if len(members) < 2:
             continue
+        members = _one_per_inode(members, hashes)
         for split, sure in _split(members, hashes):
             if sure == 'size':
                 # Content-addressed: a blob named by its hash only matches a blob of the same name.
@@ -90,10 +91,25 @@ def same_size(all_files, min_size=0, hashes=None):
     return groups
 
 
+def _one_per_inode(members, hashes):
+    """Hard links are one file under two names: keep the first name of each."""
+    seen, out = set(), []
+    for f in members:
+        ino = hashes.get((f['device'], f['path']), {}).get('dev_ino')
+        if ino and (f['device'], ino) in seen:
+            continue
+        if ino:
+            seen.add((f['device'], ino))
+        out.append(f)
+    return out
+
+
 def _split(members, hashes):
     """One size's files, split by full hash, else partial hash, where known."""
     def key(f):
         h = hashes.get((f['device'], f['path']), {})
+        if h.get('size') not in (None, f['size']):
+            h = {}      # read when the file was another size: about other bytes
         if h.get('full'):
             return ('hash', h['full'])
         if h.get('partial'):

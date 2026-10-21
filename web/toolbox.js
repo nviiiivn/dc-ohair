@@ -24,12 +24,47 @@ let tab = 'films';
 let report = null;
 let shown = null;         // the group whose files are outlined
 let error = '';
+let job = null;           // /api/tools/jobs while a check runs, and its last result
+let keyLine = '';
 
-async function getJSON(url) {
-  const r = await fetch(url, { credentials: 'same-origin' });
+async function getJSON(url, post) {
+  const r = await fetch(url, post === undefined ? { credentials: 'same-origin' }
+    : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-DC': '1' }, body: JSON.stringify(post) });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.error || `${r.status}`);
+  if (!r.ok && r.status !== 409) throw new Error(body.error || `${r.status}`);
   return body;
+}
+
+function jobHTML() {
+  if (!job || !job.devices) return '';
+  const rows = Object.entries(job.devices).map(([id, d]) => `<li><b>${esc(id)}</b> ${esc({ waiting: 'waiting', reading: 'reading…', done: `done, ${d.read || 0} of ${d.files} read`, failed: 'could not check' }[d.state] || d.state)}${d.error ? `<small>${esc(d.error)}</small>` : ''}</li>`).join('');
+  return `<ul class="job">${rows || '<li>Nothing left to check.</li>'}</ul>`;
+}
+
+function checkHTML() {
+  const busy = job && job.running;
+  return `<div class="check">
+    <p>${busy ? `Checking: ${job.kind === 'full' ? 'every byte' : 'the start and end'} of each file, one device at a time…`
+      : 'Read the files to be sure. Nothing is changed; the devices only read.'}</p>
+    <button type="button" class="primary" data-check="partial" ${busy ? 'disabled' : ''}>Check them</button>
+    <button type="button" class="ghost" data-check="full" ${busy ? 'disabled' : ''} title="Reads every byte of every file in these sets: slow for big files.">Check every byte</button>
+    <details data-key><summary>How to allow it on a locked-down device</summary>
+      <p class="muted">A device set up with the scanner's restricted line lets the hub run only the scanner, which never opens a file. Checking needs this second line in the same authorized_keys. It lets the hub's key run the read-only tools agent and nothing else.</p>
+      <pre>${esc(keyLine || '…')}</pre></details>
+    ${jobHTML()}</div>`;
+}
+
+async function poll() {
+  job = await getJSON('/api/tools/jobs').catch(() => job);
+  render();
+  if (job && job.running) setTimeout(poll, 2000);
+  else if (job && job.finished) load();
+}
+
+async function check(kind) {
+  job = await getJSON('/api/tools/dupes/check', { full: kind === 'full' }).catch((e) => ({ error: e.message }));
+  render();
+  poll();
 }
 
 function where(f) {
@@ -70,7 +105,8 @@ function render() {
       ? `<b>${count.toLocaleString()}</b> films and episodes are on your drives more than once: <b>${size(total)}</b> in the extra copies.`
       : `<b>${count.toLocaleString()}</b> sets of files are the same size: up to <b>${size(total)}</b>, but most are only leads until checked.`}</span>
       <button type="button" class="ghost" data-showall>${shown && shown.all ? 'Hide in city' : 'Show all in city'}</button></p>
-      <p class="muted">${report.files.toLocaleString()} files looked at: everything the scans list, which is every file of the scan's minimum size and up. Nothing on any device was opened or changed.</p>
+      <p class="muted">${report.files.toLocaleString()} files looked at: everything the scans list, which is every file of the scan's minimum size and up. ${report.bytes.some((g) => g.sure === 'partial' || g.sure === 'hash') ? 'The checked sets were read on their devices; nothing was changed.' : 'Nothing on any device was opened or changed.'}</p>
+      ${films ? '' : checkHTML()}
       <ul class="groups">${groupsHTML(films ? report.films : report.bytes, tab)}</ul>
       ${more ? `<p class="muted">…and ${more.toLocaleString()} smaller ones.</p>` : ''}`;
   }
@@ -98,6 +134,7 @@ async function load() {
   render();
   try {
     report = await getJSON('/api/tools/dupes');
+    if (!job) { job = await getJSON('/api/tools/jobs'); if (job.running) poll(); }
   } catch (e) {
     error = `Could not look for duplicates: ${e.message}`;
   }
@@ -127,6 +164,13 @@ function setup() {
   $('#toolbox').addEventListener('click', (e) => {
     const t = e.target;
     if (t.closest('[data-close]')) return close();
+    const ck = t.closest('[data-check]');
+    if (ck) return check(ck.dataset.check);
+    if (t.closest('[data-key] summary') && !keyLine) {
+      getJSON('/api/tools/key').then((r) => { keyLine = r.line; render(); $('#toolbox [data-key]').open = true; }).catch(() => {});
+      return;
+    }
+    if (t.closest('details, pre')) return;
     const tb = t.closest('[data-tab]');
     if (tb) { tab = tb.dataset.tab; shown = null; city()?.mark([]); return render(); }
     if (t.closest('[data-showall]')) {
