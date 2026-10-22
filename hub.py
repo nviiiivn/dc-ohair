@@ -8,7 +8,7 @@ and hosts the settings page and first-run wizard.
 Scanning is read-only: nothing here deletes or moves anything on any device.
 With no config file the hub starts empty and the page runs the setup wizard.
 """
-import argparse, base64, datetime, glob, gzip, hashlib, hmac, ipaddress, json, os, secrets, threading, time, urllib.parse, urllib.request
+import argparse, base64, datetime, glob, gzip, hashlib, hmac, ipaddress, json, os, re, secrets, threading, time, urllib.parse, urllib.request
 from html import escape as html_escape
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +20,11 @@ from collect import DATA, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
+# The no-Python agent (agent-go/), one file per system: served from here when the
+# hub has them (a release tarball or the Docker image), else from the release on GitHub.
+AGENTS = os.environ.get('DC_AGENTS', os.path.join(HERE, 'dist', 'agent'))
+AGENT_RELEASES = 'https://github.com/nviiiivn/diskcity/releases/download/v%s/%s'
+AGENT_NAME = re.compile(r'^dc-agent-(linux|darwin|windows|freebsd)-(amd64|arm64|arm|386)(\.exe)?$')
 VERSION = '0.8.0'
 THEME_DEFAULTS = {'cookie': 'dc-theme', 'storage': 'dc-theme', 'domain': '', 'default': 'dark'}
 UI_DEFAULTS = {'view': 'city', 'units': 'binary'}
@@ -601,6 +606,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path in ('/agent.py', '/push.py'):
             with open(os.path.join(HERE, path[1:]), 'rb') as f:
                 return self.send_bytes(f.read(), 'text/x-python; charset=utf-8')
+        if path == '/dl/version' or path.startswith('/dl/dc-agent-'):
+            return self.agent_download(path[4:])
         if path == '/api/push/spec':
             dev = self.hub.device_for(self.bearer())
             if not dev:
@@ -912,6 +919,22 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:  # no ssh-keygen on this machine
                 out['key_error'] = str(e)
         return out
+
+    def agent_download(self, name):
+        """/dl/version and /dl/dc-agent-<os>-<arch>: the no-Python agent, for the install
+        lines in Settings and for installed agents keeping up with the hub. Public, like
+        /push.py: the binary holds no secret, and the token travels in the command."""
+        if name == 'version':
+            have = sorted(n for n in os.listdir(AGENTS) if AGENT_NAME.match(n)) if os.path.isdir(AGENTS) else []
+            return self.send_json({'version': VERSION, 'files': have, 'from': 'hub' if have else 'github'})
+        if not AGENT_NAME.match(name):
+            return self.send_json({'error': 'no such agent'}, 404)
+        local = os.path.join(AGENTS, name)
+        if os.path.isfile(local):
+            with open(local, 'rb') as f:
+                self.extra_headers.append(('Content-Disposition', 'attachment; filename="%s"' % name))
+                return self.send_bytes(f.read(), 'application/octet-stream')
+        return self.redirect(AGENT_RELEASES % (VERSION, name))
 
     def send_bytes(self, body, ctype, code=200):
         self.send_response(code)
