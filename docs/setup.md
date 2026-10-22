@@ -230,6 +230,20 @@ Good to know:
 - The device needs to reach the hub's address. By default that's this machine's LAN address and port; set `hub.public_url` if devices should use a different one (an HTTPS name behind your proxy, say). If your reverse proxy asks for a login, let `/agent.py`, `/push.py`, `/dl/*`, `/api/push/spec` and `/api/report` through, because devices authenticate with their own token instead.
 - To stop a device, revoke its token in **Settings → Security**, then on the device run `~/.dc-ohair/dc-agent uninstall` (on Windows, `$env:USERPROFILE\.dc-ohair\dc-agent.exe uninstall`), or `python3 ~/.dc-ohair/dc-push.py uninstall` for the Python one. `dc-agent` takes its schedule away and moves `~/.dc-ohair` aside as `~/.dc-ohair-uninstalled-<date>` rather than deleting it.
 
+## Another Disk City: a second house, or a friend's server
+
+One hub can show another hub's whole city as a village of its own, read-only. Each of the other hub's drives becomes a block, named after its device (*NAS · Media*).
+
+1. On the hub to be shown: **Settings → Security → Share this city**. Give the share a name (who it's for) and press **Make a share token**. Copy the address and the token; the token is shown only then.
+2. On the hub that shows it: **Settings → Devices → + Add a device**, choose **Another Disk City**, and paste the address and the token. **Test connection** says how many drives it sees.
+
+Good to know:
+
+- It shares only its own devices and their drive trees: not its settings, its scan errors, its disks' serial numbers, or other hubs it shows (so a share is never passed on).
+- The showing hub asks again on each of its own scans. **Stop sharing** on the shared hub, and it stops at once.
+- The shared hub's full or failing drives alert its own owner. Tick **Alert me when its drives are full or failing too** to be told as well.
+- The token sits in the showing hub's config, which the page and the config export never show; the shared hub keeps only a hash of it. If the shared hub's page is behind a reverse-proxy login, let `/api/node/city` through, as with the push agent's paths.
+
 ### Drives that come and go
 
 Tick **mount** (`mounted: true`) for USB disks and anything not always plugged in. If the path isn't a mount point when the scan runs, that drive is skipped with "not mounted", and the city keeps its last good scan.

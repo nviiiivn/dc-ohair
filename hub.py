@@ -195,7 +195,10 @@ class Hub:
             live_by = {d['name']: d for d in live['drives']}
             snap_by = {d['name']: d for d in snap['drives']}
             drives = []
-            for want in dev['drives']:
+            if dev.get('node'):
+                # another hub's city: its drives are whatever it sent, each one a block of this village
+                drives = [dict(d, source='live', when=d.get('when') or live.get('scanned')) for d in live['drives'] if 'tree' in d]
+            for want in [] if dev.get('node') else dev['drives']:
                 name = want['name']
                 got = live_by.get(name, {})
                 if 'tree' in got:
@@ -205,7 +208,8 @@ class Hub:
                 else:
                     drives.append({'name': name, 'path': want['path'], 'source': 'none', 'why': got.get('error')})
             devices.append({'id': dev['id'], 'name': dev['name'], 'note': dev.get('note', ''),
-                            'hub': bool(dev.get('local')), 'status': status.get(dev['id']), 'drives': drives})
+                            'hub': bool(dev.get('local')), 'status': status.get(dev['id']), 'drives': drives,
+                            **({'node': True} if dev.get('node') else {})})
         self.attach_health(devices)
         city = {'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'version': VERSION,
                 'alert_percent': self.cfg['hub']['alert_percent'], 'ui': self.ui(), 'devices': devices}
@@ -316,9 +320,12 @@ class Hub:
     def public_config(self):
         cfg = json.loads(json.dumps(self.cfg))
         cfg['hub'].pop('admin_password', None)
+        cfg['hub']['shares'] = [{'label': s.get('label', ''), 'created': s.get('created', '')} for s in cfg['hub'].get('shares') or []]
         for d in cfg['devices']:
             if d.pop('push_token', None):
                 d['paired'] = True
+            if d.pop('node_token', None):
+                d['node_paired'] = True
         return cfg
 
     SECURITY_KEYS = ('auth', 'trusted_proxies', 'proxy_user_header', 'admin_password', 'oidc')
@@ -331,13 +338,24 @@ class Hub:
                 new['hub'][key] = self.cfg['hub'][key]
             else:
                 new['hub'].pop(key, None)
-        # enrollment tokens (stored hashed) only change through /api/push/token
+        # enrollment tokens (stored hashed) only change through /api/push/token, and this
+        # hub's shares only through /api/node/share; another hub's token is kept unless a new one is given
         tokens = {d['id']: d.get('push_token') for d in self.cfg['devices']}
+        node_tokens = {d['id']: d.get('node_token') for d in self.cfg['devices']}
         for d in new['devices']:
             d.pop('paired', None)
             d.pop('push_token', None)
+            d.pop('node_paired', None)
             if tokens.get(d['id']):
                 d['push_token'] = tokens[d['id']]
+            if not d.get('node'):
+                d.pop('node_token', None)
+            elif not d.get('node_token') and node_tokens.get(d['id']):
+                d['node_token'] = node_tokens[d['id']]
+        if self.cfg['hub'].get('shares'):
+            new['hub']['shares'] = self.cfg['hub']['shares']
+        else:
+            new['hub'].pop('shares', None)
         collect.save_config(new, self.path)
         self.cfg = new
 
@@ -388,6 +406,60 @@ class Hub:
             if d.get('push_token') and hmac.compare_digest(d['push_token'], digest):
                 return d
         return None
+
+    # ----- other hubs: this city shown in theirs, theirs in this one -----
+
+    def share(self, label):
+        """A token another hub uses to show this city as one of its villages, read-only.
+        Shown once, kept hashed, like a device's enrollment token."""
+        label = ' '.join(str(label or '').split())[:60] or 'another hub'
+        token = secrets.token_urlsafe(32)
+        cfg = json.loads(json.dumps(self.cfg))
+        shares = [s for s in cfg['hub'].get('shares') or [] if s.get('label') != label]
+        shares.append({'label': label, 'token': hashlib.sha256(token.encode()).hexdigest(),
+                       'created': time.strftime('%Y-%m-%d')})
+        cfg['hub']['shares'] = shares
+        collect.save_config(collect.validate(cfg), self.path)
+        self.cfg = cfg
+        return token
+
+    def unshare(self, label):
+        cfg = json.loads(json.dumps(self.cfg))
+        cfg['hub']['shares'] = [s for s in cfg['hub'].get('shares') or [] if s.get('label') != label]
+        collect.save_config(collect.validate(cfg), self.path)
+        self.cfg = cfg
+
+    def share_for(self, token):
+        if not token:
+            return None
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        for s in self.cfg['hub'].get('shares') or []:
+            if s.get('token') and hmac.compare_digest(s['token'], digest):
+                return s
+        return None
+
+    def node_city(self):
+        """What a hub this one is shared with sees: this hub's own devices and their drive trees.
+        Not the config, the scan status, disk serial numbers, or the other hubs this one shows,
+        so a share is never passed on."""
+        city = self.city()
+        devices = []
+        for dev in city['devices']:
+            if dev.get('node'):
+                continue
+            drives = []
+            for d in dev['drives']:
+                if 'tree' not in d:
+                    continue
+                item = {k: d[k] for k in ('name', 'path', 'fs', 'tree', 'when') if k in d}
+                if d.get('health'):
+                    item['health'] = {k: d['health'][k] for k in ('state', 'notes') if k in d['health']}
+                drives.append(item)
+            devices.append({'id': dev['id'], 'name': dev['name'], 'drives': drives})
+        return {'disk_city': VERSION, 'generated': city['generated'], 'devices': devices}
+
+    def node_alerts(self, dev_id):
+        return any(d['id'] == dev_id and d.get('node_alerts') for d in self.cfg['devices'])
 
     def push_spec(self, dev):
         spec = collect.scan_spec(self.cfg, dev.get('drives') or 'auto')
@@ -472,6 +544,8 @@ class Hub:
             if opts.get('offline') and st and not st.get('ok'):
                 out.append({'key': 'scan:' + dev['id'], 'kind': 'scan', 'level': 'warning', 'device': dev['name'],
                             'msg': "%s couldn't be scanned: %s" % (dev['name'], st.get('msg'))})
+            if dev.get('node') and not self.node_alerts(dev['id']):
+                continue    # another hub's drives: its owner gets those alerts, unless this one asked too
             for d in dev['drives']:
                 where = '%s / %s' % (dev['name'], d['name'])
                 fs = d.get('fs') or {}
@@ -526,6 +600,7 @@ class Handler(SimpleHTTPRequestHandler):
     logins = RateLimit(8, 600)
     probes = RateLimit(30, 60)
     reports = RateLimit(30, 60)
+    nodes = RateLimit(30, 60)
     searches = RateLimit(4, 60)
 
     def __init__(self, *a, **kw):
@@ -613,6 +688,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not dev:
                 return self.send_json({'error': 'unknown or revoked enrollment token'}, 401)
             return self.send_json(self.hub.push_spec(dev))
+        if path == '/api/node/city':
+            if not self.nodes.allow(self.client_ip()):
+                return self.send_json({'error': 'too many requests; try again in a minute'}, 429)
+            if not self.hub.share_for(self.bearer()):
+                return self.send_json({'error': 'unknown or revoked share token'}, 401)
+            return self.send_json(self.hub.node_city())
         if path in ('/auth/login', '/auth/callback'):
             return self.oidc_route(path, query)
         if path == '/theme-config.js':
@@ -766,6 +847,12 @@ class Handler(SimpleHTTPRequestHandler):
                                        'commands can only be added from a browser on the hub, or in the config file.'})
             results = notifier.send_all([ch], "Disk City test", 'This is a test from your disk city. If you can read it, alerts will reach you here.')
             return self.send_json(results[0])
+        if path in ('/api/node/share', '/api/node/unshare'):
+            if path.endswith('/unshare'):
+                hub.unshare(data.get('label', ''))
+                return self.send_json({'ok': True, 'shares': hub.public_config()['hub']['shares']})
+            return self.send_json({'token': hub.share(data.get('label')), 'hub': hub.public_url(self.headers.get('Host')),
+                                   'shares': hub.public_config()['hub']['shares']})
         if path in ('/api/push/token', '/api/push/revoke'):
             dev_id = data.get('id', '')
             try:
@@ -781,6 +868,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({'error': 'Slow down a little.'}, 429)
             dev = data.get('device') or {}
             dev.setdefault('id', 'probe')
+            if dev.get('node'):
+                if not dev.get('node_token'):
+                    dev['node_token'] = next((d.get('node_token') for d in hub.cfg['devices'] if d['id'] == dev['id']), None)
+                out, err = collect.node_report(dev, 30)
+                if err:
+                    return self.send_json({'ok': False, 'error': err})
+                return self.send_json({'ok': True, 'node': True, 'drives': len(out['drives']), 'devices': out['node']['devices'],
+                                       'host': out.get('host')})
             if not dev.get('local') and not collect.ssh_target(dev):
                 return self.send_json({'ok': False, 'error': 'Fill in the host first.'})
             if path == '/api/test':
@@ -896,6 +991,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({'ok': True, 'host': 'demo-box', 'mounts': hub.demo['mounts']})
         if path == '/api/push/token':
             return self.send_json({'token': 'demo-token-not-real', 'hub': 'http://192.0.2.5:7171'})
+        if path == '/api/node/share':
+            return self.send_json({'token': 'demo-share-not-real', 'hub': 'http://192.0.2.5:7171',
+                                   'shares': [{'label': data.get('label') or 'another hub', 'created': time.strftime('%Y-%m-%d')}]})
         if path == '/api/health/test':
             return self.send_json({'ok': True, 'disks': 6, 'matched': 5})
         if path == '/api/notify/test':

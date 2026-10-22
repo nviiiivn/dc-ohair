@@ -7,6 +7,7 @@ All notable changes to Disk City are listed here. Versions follow [semantic vers
 ### Added
 - **dc-agent**, the agent with nothing to install (`agent-go/`): one file for Windows, macOS (Intel and Apple Silicon), Linux (x86, 64-bit and 32-bit ARM), LibreELEC and NAS boxes, and FreeBSD. It scans exactly as `agent.py` does and does what `dc-push.py` does (install with the hub's token, a daily schedule, signed reports), so a Windows PC no longer needs Python first. Settings' install lines now download it from the hub (`/dl/`), with the Python line underneath as a fallback. It keeps itself the hub's version, and moves its folder aside on uninstall rather than deleting it.
 - The agents are built in GitHub Actions on every change and attached to each release.
+- **Another Disk City as a village**: a hub can show another hub's whole city, read-only, with a token the other hub made (Settings → Security → Share this city). A second house, or a friend's server, then shows up as one more district, each of its drives a block. It shares only its own devices' drive trees, and a share is never passed on.
 
 ## [0.8.0] - the phone app
 

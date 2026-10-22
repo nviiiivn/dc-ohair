@@ -26,7 +26,7 @@ It's for anyone with a few machines and a pile of disks: a media server, a gamin
 - **See what grew.** Each drive has a 90-day sparkline, and *Sort → Newest* lights up what just landed.
 - **Find anything.** Search every drive by name and fly straight to it.
 - **Hear about trouble.** A banner, and optional ntfy, Discord or email alerts, when a drive is almost full or (if you turn on health) starting to fail.
-- **Bring every device.** Linux, macOS, LibreELEC/Kodi and NAS boxes over SSH; Windows and out-of-reach machines with a one-line push agent; and a network search to find them all.
+- **Bring every device.** Linux, macOS, LibreELEC/Kodi and NAS boxes over SSH; Windows and out-of-reach machines with a one-line push agent that needs nothing installed first; another whole Disk City (a second house, a friend's server) as a village of its own; and a network search to find them all.
 - **Use it anywhere.** Mouse and keyboard, or touch on a phone or tablet, in six themes.
 
 ---
@@ -351,6 +351,9 @@ Everything the page shows comes from a JSON API, and it's meant to stay stable s
 | POST | `/api/detect` | List a device's drives |
 | PUT | `/api/settings` | Save the config |
 | POST | `/api/settings/import` | Import a YAML config |
+| POST | `/api/node/share` / `/api/node/unshare` | Share this city with another hub (`{"label": "…"}`, answered with a token shown once) / stop |
+| GET | `/api/node/city` | What a hub this one is shared with sees; send its token as `Authorization: Bearer …` |
+| GET | `/dl/version`, `/dl/dc-agent-<os>-<arch>` | The no-Python agent for each system, and its version; public, like `/push.py` |
 
 Example:
 

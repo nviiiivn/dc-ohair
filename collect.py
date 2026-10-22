@@ -65,8 +65,12 @@ def validate(cfg):
             raise ValueError('every device needs a unique id made of letters, digits, - _ or . (got %r)' % dev_id)
         seen.add(dev_id)
         dev.setdefault('name', dev_id)
-        if not dev.get('local') and not dev.get('push') and not ssh_target(dev):
-            raise ValueError('device %s needs local: true, push: true, or a host to ssh to' % dev_id)
+        if dev.get('node'):
+            if not re.match(r'^https?://[^\s/]+', str(dev['node'])):
+                raise ValueError('device %s: node is another hub\'s address, like http://other-hub:7171' % dev_id)
+            dev['drives'] = []      # another hub says what its drives are
+        elif not dev.get('local') and not dev.get('push') and not ssh_target(dev):
+            raise ValueError('device %s needs local: true, push: true, node: <another hub>, or a host to ssh to' % dev_id)
         for d in dev.setdefault('drives', []) or []:
             if not d.get('name') or not re.match(r'^(/|[A-Za-z]:[\\/])', str(d.get('path', ''))):
                 raise ValueError('every drive on %s needs a name and an absolute path' % dev_id)
@@ -309,8 +313,52 @@ def store(dev, out, cfg):
     return msg
 
 
+# ---------- another Disk City hub ----------
+
+def node_report(dev, timeout=120):
+    """Another hub's city (its /api/node/city, with the share token it gave this one) as a report
+    of this device: each of its devices' drives becomes a drive here, named "Device · Drive".
+    Returns (report, None) or (None, plain-language error)."""
+    import urllib.error, urllib.request
+    url = str(dev.get('node') or '').rstrip('/')
+    if not re.match(r'^https?://', url):
+        return None, 'The other hub\'s address should start with http:// or https://.'
+    req = urllib.request.Request(url + '/api/node/city', headers={
+        'Authorization': 'Bearer ' + (dev.get('node_token') or ''), 'User-Agent': 'dc-ohair-hub'})
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            city = json.loads(res.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return None, ("That hub turned this one's token away. On it, make a new share (Settings → Security → "
+                          "Share this city) and paste the new token here.")
+        if e.code == 404:
+            return None, 'That address answers, but not as a Disk City hub new enough to share its city (0.9 or later).'
+        return None, 'That hub said %d.' % e.code
+    except (urllib.error.URLError, OSError) as e:
+        return None, "Can't reach %s: %s" % (url, getattr(e, 'reason', e))
+    except ValueError:
+        return None, 'That address answered with something that is not a Disk City.'
+    drives = []
+    for d in city.get('devices') or []:
+        for dr in d.get('drives') or []:
+            if isinstance(dr, dict) and dr.get('tree'):
+                drives.append(dict(dr, name='%s · %s' % (d.get('name', '?'), dr.get('name', '?'))))
+    return {'agent': 'node', 'host': url, 'drives': drives, 'secs': round(time.time() - t0, 1),
+            'scanned': city.get('generated') or time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            'node': {'version': city.get('disk_city'), 'devices': len(city.get('devices') or [])}}, None
+
+
 def collect(dev, cfg):
     progress[dev['id']] = {'state': 'scanning', 'since': time.time()}
+    if dev.get('node'):
+        out, err = node_report(dev)
+        if err:
+            return set_status(dev['id'], False, err)
+        save(os.path.join(DATA, dev['id'] + '.json'), out)
+        record_history(dev['id'], out, int(cfg['hub']['history_days']))
+        return set_status(dev['id'], True, '%d drives from %d devices on that hub' % (len(out['drives']), out['node']['devices']))
     out, err = run_agent(dev, scan_spec(cfg, dev['drives']), float(cfg['scan']['timeout_hours']) * 3600)
     if err:
         return set_status(dev['id'], False, err)
@@ -320,7 +368,7 @@ def collect(dev, cfg):
 def collect_all(cfg, only=None):
     os.makedirs(DATA, exist_ok=True)
     # push devices send their own reports; the hub can't start their scans
-    devices = [d for d in cfg['devices'] if (not only or d['id'] in only) and d.get('drives') and not d.get('push')]
+    devices = [d for d in cfg['devices'] if (not only or d['id'] in only) and (d.get('drives') or d.get('node')) and not d.get('push')]
     for d in devices:
         progress[d['id']] = {'state': 'waiting'}
     threads = [threading.Thread(target=collect, args=(d, cfg)) for d in devices]
