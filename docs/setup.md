@@ -209,7 +209,7 @@ The scan sees what that user can read. For media folders, a normal user is usual
 
 ### Windows
 
-Use the push agent (next section). Install Python first (`winget install Python.Python.3.12`), then paste the PowerShell line from Settings. A Windows disk that's also mounted on a Linux machine (dual boot, or a disk in a dock) can be scanned there instead, read-only.
+Use the push agent (next section): paste the PowerShell line from Settings. Nothing needs installing first. A Windows disk that's also mounted on a Linux machine (dual boot, or a disk in a dock) can be scanned there instead, read-only.
 
 ## Devices the hub can't reach: the push agent
 
@@ -217,7 +217,7 @@ Some devices can't be reached over SSH: Windows PCs, a laptop on another network
 
 1. In **Settings → Devices** (or step 2 of the wizard), add the device and choose **It sends to the hub**.
 2. Press **Make the install command** and pick the device's system: Linux, macOS, LibreELEC / Kodi, NAS, or Windows.
-3. Copy the line and run it **on that device**. It downloads `dc-push.py` from your hub, scans once, and sets up a daily run (a systemd timer, cron, launchd on macOS, or Task Scheduler on Windows).
+3. Copy the line and run it **on that device**. It downloads the Disk City agent from your hub (`dc-agent`, one file for that system, with nothing to install first), scans once, and sets up a daily run (a systemd timer, cron, launchd on macOS, or Task Scheduler on Windows). Under each line, **Or with Python instead** gives the same thing as `dc-push.py`, for a device that has Python and can't download the agent.
 4. The page shows *Waiting for the device to report in…* and turns green when the first report arrives.
 
 <p align="center"><img src="media/push.png" width="760" alt="Making the install command for a device that sends its own reports"></p>
@@ -225,9 +225,10 @@ Some devices can't be reached over SSH: Windows PCs, a laptop on another network
 Good to know:
 
 - Leave the device's drives empty and it picks its own real drives on the first report. Untick any you don't want afterwards.
-- Each run fetches the hub's current `agent.py`, so the hub and its devices never drift apart.
-- The device needs to reach the hub's address. By default that's this machine's LAN address and port; set `hub.public_url` if devices should use a different one (an HTTPS name behind your proxy, say). If your reverse proxy asks for a login, let `/agent.py`, `/push.py`, `/api/push/spec` and `/api/report` through, because devices authenticate with their own token instead.
-- To stop a device, revoke its token in **Settings → Security**, then on the device run `python3 ~/.dc-ohair/dc-push.py uninstall`.
+- The hub and its devices never drift apart: `dc-agent` updates itself when the hub has a newer one (keeping the old file beside it as `.old`), and `dc-push.py` fetches the hub's current `agent.py` every run.
+- The hub serves the agents from `dist/agent/` next to `hub.py` when they are there (release downloads and the Docker image have them), and otherwise sends the device to this version's GitHub release for them.
+- The device needs to reach the hub's address. By default that's this machine's LAN address and port; set `hub.public_url` if devices should use a different one (an HTTPS name behind your proxy, say). If your reverse proxy asks for a login, let `/agent.py`, `/push.py`, `/dl/*`, `/api/push/spec` and `/api/report` through, because devices authenticate with their own token instead.
+- To stop a device, revoke its token in **Settings → Security**, then on the device run `~/.dc-ohair/dc-agent uninstall` (on Windows, `$env:USERPROFILE\.dc-ohair\dc-agent.exe uninstall`), or `python3 ~/.dc-ohair/dc-push.py uninstall` for the Python one. `dc-agent` takes its schedule away and moves `~/.dc-ohair` aside as `~/.dc-ohair-uninstalled-<date>` rather than deleting it.
 
 ### Drives that come and go
 

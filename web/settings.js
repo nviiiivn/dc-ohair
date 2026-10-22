@@ -175,15 +175,23 @@ function pushHelp(dev) {
     <div class="pushcmd" aria-live="polite"></div></div>`;
 }
 
+// Each system's line downloads dc-agent (agent-go/), one file with nothing to install, for its
+// processor; the line under it is the same with Python instead (push.py), for a box the hub's
+// download can't reach. sh -c keeps the line working when the device's shell is fish.
 function pushCommands(hub, token) {
+  const bin = (os) => `sh -c 'cd ~ && a=$(uname -m); case $a in x86_64|amd64) a=amd64;; aarch64|arm64) a=arm64;; arm*) a=arm;; esac; `
+    + `{ curl -fsSLo dc-agent ${hub}/dl/dc-agent-${os}-$a || wget -qO dc-agent ${hub}/dl/dc-agent-${os}-$a; } && chmod +x dc-agent && ./dc-agent install --hub ${hub} --token ${token}'`;
   const sh = `cd ~ && python3 -c "import urllib.request as u; u.urlretrieve('${hub}/push.py', 'dc-push.py')" && python3 dc-push.py install --hub ${hub} --token ${token}`;
   return [
-    ['Linux', sh, 'Needs python3. Adds a daily systemd timer, or a cron job.'],
-    ['macOS', sh, "Needs Apple's python3 (run xcode-select --install once). Adds a launchd job that keeps the Mac awake while it scans."],
-    ['LibreELEC / Kodi', sh, 'Run it over SSH as root. Turn on cron in LibreELEC Settings → Services so the daily run happens.'],
-    ['NAS', sh, 'Run it over SSH. On Synology, install Python 3 from Package Center first.'],
-    ['Windows', `iwr ${hub}/push.py -OutFile $env:USERPROFILE\\dc-push.py; python $env:USERPROFILE\\dc-push.py install --hub ${hub} --token ${token}`,
-      "Paste it into PowerShell. Needs Python (winget install Python.Python.3.12); if 'python' isn't found, use 'py -3'. Adds a Task Scheduler job."],
+    ['Linux', bin('linux'), 'Nothing to install first. Adds a daily systemd timer, or a cron job.', sh, 'Needs python3.'],
+    ['macOS', bin('darwin'), 'Nothing to install first. Adds a launchd job that keeps the Mac awake while it scans.', sh,
+      "Needs Apple's python3 (run xcode-select --install once)."],
+    ['LibreELEC / Kodi', bin('linux'), 'Run it over SSH as root. Turn on cron in LibreELEC Settings → Services so the daily run happens.', sh, ''],
+    ['NAS', bin('linux'), 'Run it over SSH. Nothing to install first, Synology included.', sh, 'On Synology, install Python 3 from Package Center first.'],
+    ['Windows', `$a = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {'arm64'} else {'amd64'}; iwr ${hub}/dl/dc-agent-windows-$a.exe -OutFile $env:USERPROFILE\\dc-agent.exe; & $env:USERPROFILE\\dc-agent.exe install --hub ${hub} --token ${token}`,
+      'Paste it into PowerShell. Nothing to install first. Adds a Task Scheduler job.',
+      `iwr ${hub}/push.py -OutFile $env:USERPROFILE\\dc-push.py; python $env:USERPROFILE\\dc-push.py install --hub ${hub} --token ${token}`,
+      "Needs Python (winget install Python.Python.3.12); if 'python' isn't found, use 'py -3'."],
   ];
 }
 
@@ -195,7 +203,8 @@ function showPushCommand(box, dev, hub, token) {
     <p class="waiting">Waiting for ${esc(dev.name || 'the device')} to report in…</p>`;
   const pick = (i) => {
     box.querySelectorAll('[data-os]').forEach((b) => b.setAttribute('aria-selected', String(+b.dataset.os === i)));
-    box.querySelector('.oscmd').innerHTML = copyBox(cmds[i][1]) + `<p class="muted">${esc(cmds[i][2])}</p>`;
+    box.querySelector('.oscmd').innerHTML = copyBox(cmds[i][1]) + `<p class="muted">${esc(cmds[i][2])}</p>`
+      + `<details class="alt"><summary>Or with Python instead</summary>${copyBox(cmds[i][3])}<p class="muted">${esc(cmds[i][4] || 'Needs python3.')}</p></details>`;
   };
   box.querySelector('.os').addEventListener('click', (e) => { const b = e.target.closest('[data-os]'); if (b) pick(+b.dataset.os); });
   pick(/Win/.test(navigator.platform) ? 4 : 0);
@@ -485,7 +494,7 @@ Secret from this environment variable: DC_OIDC_SECRET`],
   }
   return [
     ['1. Caddyfile: VoidAuth guards the page; push agents keep their own way in with their tokens', `${host(dc)} {
-  @agents path /agent.py /push.py /api/push/spec /api/report
+  @agents path /agent.py /push.py /dl/* /api/push/spec /api/report
   handle @agents {
     reverse_proxy dc-ohair:7171
   }

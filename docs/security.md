@@ -30,7 +30,7 @@ The hub never stores a device password. There are three ways for it to log in:
 1. **SSH keys** (recommended): the hub's own key, or the keys its user already has.
 2. **password_cmd**: a command the hub runs at scan time that *prints* the password, such as a password-manager lookup like `pass show nas/ssh`. The output goes to `sshpass` through an environment variable (never on a command line, where other users could see it in `ps`). It's never written to disk, a log, or the page.
 3. **This machine**: no login at all, because the hub scans its own drives.
-4. **Push agent**: the hub never logs in. The device runs `dc-push.py` and signs each report with its own enrollment token. The hub keeps only a SHA-256 hash of the token, and shows the token once, inside the install command. On the device, the token sits in `~/.dc-ohair/push.json`, readable only by that user. Revoke a token in **Settings → Security** and its reports are refused at once. Making a new command replaces the old token.
+4. **Push agent**: the hub never logs in. The device runs `dc-agent` (or `dc-push.py`) and signs each report with its own enrollment token. The hub keeps only a SHA-256 hash of the token, and shows the token once, inside the install command. On the device, the token sits in `~/.dc-ohair/push.json`, readable only by that user. Revoke a token in **Settings → Security** and its reports are refused at once. Making a new command replaces the old token.
 
 A push agent downloads the hub's current `agent.py` before every run, so a device trusts its hub the same way an SSH-scanned device does. Over plain HTTP on your LAN, the token travels unencrypted; set `hub.public_url` to an HTTPS address if devices report over a network you don't trust.
 
