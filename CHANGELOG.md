@@ -2,7 +2,7 @@
 
 All notable changes to Disk City are listed here. Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.9.0] - an agent with nothing to install, and hubs that show each other
 
 ### Added
 - **dc-agent**, the agent with nothing to install (`agent-go/`): one file for Windows, macOS (Intel and Apple Silicon), Linux (x86, 64-bit and 32-bit ARM), LibreELEC and NAS boxes, and FreeBSD. It scans exactly as `agent.py` does and does what `dc-push.py` does (install with the hub's token, a daily schedule, signed reports), so a Windows PC no longer needs Python first. Settings' install lines now download it from the hub (`/dl/`), with the Python line underneath as a fallback. It keeps itself the hub's version, and moves its folder aside on uninstall rather than deleting it.
